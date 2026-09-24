@@ -132,7 +132,7 @@ class WilliamsModelTests(unittest.TestCase):
             wheels=self.wheels,
         )
         np.testing.assert_allclose(wheel_speed_history, 0.0, atol=1e-12)
-        np.testing.assert_allclose(x, self.state, atol=1e-12)
+        np.testing.assert_allclose(x, np.tile(self.state, (len(t), 1)), atol=1e-12)
         self.assertEqual(len(t), len(x))
 
     def test_command_changes_update_wheel_speeds_without_velocity_feedback(self):
@@ -150,8 +150,12 @@ class WilliamsModelTests(unittest.TestCase):
             wheels=self.wheels,
         )
 
-        np.testing.assert_allclose(wheel_speed_history[:20], first_speeds, atol=1e-12)
-        np.testing.assert_allclose(wheel_speed_history[20:], second_speeds, atol=1e-12)
+        np.testing.assert_allclose(
+            wheel_speed_history[:20], np.tile(first_speeds, (20, 1)), atol=1e-12
+        )
+        np.testing.assert_allclose(
+            wheel_speed_history[20:], np.tile(second_speeds, (len(wheel_speed_history) - 20, 1)), atol=1e-12
+        )
         self.assertEqual(len(t) - 1, len(wheel_speed_history))
         self.assertEqual(len(x), len(t))
 

@@ -3,6 +3,8 @@
 williams_model.py
 ==================
 
+TEST MODIFICATION
+
 Direct Python implementation of Williams, Carter, Gallina & Rosati (2002),
 "Dynamic Model with Slip for Wheeled Omni-Directional Robots," IEEE T-RA
 18(3):285-293 -- equations (1)-(11), section III/IV.

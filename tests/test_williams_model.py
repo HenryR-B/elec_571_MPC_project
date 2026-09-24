@@ -122,18 +122,38 @@ class WilliamsModelTests(unittest.TestCase):
         )
         np.testing.assert_allclose(wheel_speeds, wheel_speeds_3, atol=1e-12)
 
-    def test_initial_command_zero_keeps_robot_at_rest(self):
-        t, x, wheel_speeds = wm.simulate_initial_command(
+    def test_zero_command_keeps_robot_at_rest(self):
+        t, x, wheel_speed_history = wm.simulate_command(
             self.state,
-            command=np.array([0.0, 0.0]),
+            command_fn=lambda _t: np.array([0.0, 0.0]),
             duration=0.05,
             dt=0.001,
             params=self.params,
             wheels=self.wheels,
         )
-        np.testing.assert_allclose(wheel_speeds, 0.0, atol=1e-12)
+        np.testing.assert_allclose(wheel_speed_history, 0.0, atol=1e-12)
         np.testing.assert_allclose(x, self.state, atol=1e-12)
         self.assertEqual(len(t), len(x))
+
+    def test_command_changes_update_wheel_speeds_without_velocity_feedback(self):
+        first = np.array([0.5, 0.0])
+        second = np.array([0.0, 0.5])
+        first_speeds = wm.wheel_speeds_from_body_command(first, self.wheels)
+        second_speeds = wm.wheel_speeds_from_body_command(second, self.wheels)
+
+        t, x, wheel_speed_history = wm.simulate_command(
+            self.state,
+            command_fn=lambda current_t: first if current_t < 0.02 else second,
+            duration=0.04,
+            dt=0.001,
+            params=self.params,
+            wheels=self.wheels,
+        )
+
+        np.testing.assert_allclose(wheel_speed_history[:20], first_speeds, atol=1e-12)
+        np.testing.assert_allclose(wheel_speed_history[20:], second_speeds, atol=1e-12)
+        self.assertEqual(len(t) - 1, len(wheel_speed_history))
+        self.assertEqual(len(x), len(t))
 
     def test_continuous_dynamics_shape_and_wheel_angle_rate(self):
         state = self.state.copy()

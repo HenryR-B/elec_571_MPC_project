@@ -396,22 +396,27 @@ def simulate(
 
     return t, x
 
-
-def simulate_initial_command(
+def simulate_command(
     x0: np.ndarray,
-    command: np.ndarray | list[float] | tuple[float, ...],
+    command_fn: Callable[[float], np.ndarray],
     duration: float,
     dt: float,
     params: ModelParams,
     wheels: Iterable[Wheel] = ROBOT_WHEELS,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Simulate one initial joystick command with fixed wheel speeds.
+    """Simulate a time-varying body-frame joystick/velocity command.
 
-    The body-frame command is converted to wheel angular velocities once at
-    t=0. Those wheel speeds are then held constant for the entire simulation.
-    There is no closed-loop velocity correction. Therefore the resulting
-    trajectory is the plant's response to the initial command, including any
-    lateral or yaw motion caused by the roller/gap friction model.
+    command_fn(t) returns [vx_cmd, vy_cmd] or
+    [vx_cmd, vy_cmd, omega_cmd].
+
+    At each simulation step, the current high-level command is converted once
+    to wheel angular velocities. Those wheel speeds are then held for that
+    integration step. A later joystick change therefore changes the wheel
+    speeds on the next step.
+
+    There is no feedback from the simulated robot velocity to the command.
+    Any lateral or yaw motion produced by the Williams friction model is
+    therefore part of the plant response.
 
     Returns
     -------
@@ -419,20 +424,26 @@ def simulate_initial_command(
         Simulation times.
     x : (K, state_dim)
         Plant state history.
-    wheel_speeds : (N,)
-        The constant wheel speeds generated from the initial command.
+    wheel_speed_history : (K-1, N)
+        Wheel angular velocities applied during each integration step.
     """
+    if duration <= 0.0 or dt <= 0.0:
+        raise ValueError("duration and dt must be positive")
+
     wheels = tuple(wheels)
-    wheel_speeds = wheel_speeds_from_body_command(command, wheels)
-    t, x = simulate(
-        x0=x0,
-        wheel_speed_fn=lambda _t: wheel_speeds,
-        duration=duration,
-        dt=dt,
-        params=params,
-        wheels=wheels,
-    )
-    return t, x, wheel_speeds
+    n_steps = int(np.floor(duration / dt)) + 1
+    t = np.arange(n_steps, dtype=float) * dt
+    x = np.empty((n_steps, len(x0)), dtype=float)
+    x[0] = np.asarray(x0, dtype=float)
+    wheel_speed_history = np.empty((n_steps - 1, len(wheels)), dtype=float)
+
+    for k in range(n_steps - 1):
+        command = np.asarray(command_fn(t[k]), dtype=float)
+        wheel_speeds = wheel_speeds_from_body_command(command, wheels)
+        wheel_speed_history[k] = wheel_speeds
+        x[k + 1] = rk4_step(x[k], wheel_speeds, dt, params, wheels)
+
+    return t, x, wheel_speed_history
 
 def make_rest_state(wheels: Iterable[Wheel] = ROBOT_WHEELS) -> np.ndarray:
     """Convenience constructor for a zero state with one angle per wheel."""

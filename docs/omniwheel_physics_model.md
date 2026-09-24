@@ -50,6 +50,10 @@ These omissions are model assumptions, not accidental missing equations. William
 
 ---
 
+> **Project notation:** Williams et al. use $\hat r_i$ for the wheel axle direction and $\hat s_i$ for the wheel drive direction. This project uses $\hat a_i$ for the **axial/perpendicular** direction and $\hat d_i$ for the **drive/traction** direction. This is only a notation change; the physical model is unchanged.
+>
+> \[\hat{\mathbf a}_i\equiv\hat{\mathbf r}_i^{\mathrm{Williams}},\qquad \hat{\mathbf d}_i\equiv\hat{\mathbf s}_i^{\mathrm{Williams}}\]
+>
 # 2. Coordinate systems and wheel geometry
 
 Let the robot state be
@@ -75,8 +79,8 @@ where:
 For wheel $i$, define:
 
 - $\mathbf{p}_i$: vector from robot center to wheel center;
-- $\hat{\mathbf r}_i$: wheel axle direction;
-- $\hat{\mathbf s}_i$: wheel drive/rotation direction.
+- $\hat{\mathbf a}_i$: axial/perpendicular direction;
+- $\hat{\mathbf d}_i$: wheel drive/rotation direction.
 
 The body-frame vectors are rotated into the inertial frame by
 
@@ -96,16 +100,26 @@ $$
 $$
 
 $$
-\hat{\mathbf s}_i = \mathbf R(\phi)\hat{\mathbf s}_{i,M},
+\hat{\mathbf d}_i = \mathbf R(\phi)\hat{\mathbf d}_{i,M},
 $$
 
 $$
-\hat{\mathbf r}_i = \mathbf R(\phi)\hat{\mathbf r}_{i,M}.
+\hat{\mathbf a}_i = \mathbf R(\phi)\hat{\mathbf a}_{i,M}.
 $$
 
 For the current wheel arrangement, the wheel axle points radially from the robot center and the drive direction is tangential to that radius.
 
 ---
+
+## Geometry diagrams
+
+These are original redrawings of the relevant Williams geometry using this project's $\hat d/\hat a$ notation. The original paper is linked for comparison.
+
+![Robot frame and wheel directions](figures/wheel_frame.svg)
+
+![Wheel contact and roller-gap geometry](figures/roller_gap_geometry.svg)
+
+Original reference: [Williams et al. (2002)](https://people.ohio.edu/williams/html/PDF/IEEETRA02.pdf)
 
 # 3. Contact-point kinematics
 
@@ -155,7 +169,7 @@ The wheel angular velocity is
 $$
 \boldsymbol{\omega}_i
 =
-\dot\theta_i\hat{\mathbf r}_i.
+\dot\theta_i\hat{\mathbf a}_i.
 $$
 
 Williams expresses the peripheral contact velocity using
@@ -173,10 +187,10 @@ With the sign convention used in this project, this peripheral velocity is repre
 $$
 \mathbf v_{r,i}
 =
-\rho_i\dot\theta_i\hat{\mathbf s}_i.
+\rho_i\dot\theta_i\hat{\mathbf d}_i.
 $$
 
-The exact sign depends on the chosen positive wheel-angle and $\hat{\mathbf s}_i$ conventions. What matters is that the convention is used consistently in both inverse kinematics and the slip equation below.
+The exact sign depends on the chosen positive wheel-angle and $\hat{\mathbf d}_i$ conventions. What matters is that the convention is used consistently in both inverse kinematics and the slip equation below.
 
 ---
 
@@ -187,7 +201,7 @@ The longitudinal slip velocity is the component of the total contact velocity in
 $$
 v_{W,i}
 =
-\mathbf v_{c,i}\cdot\hat{\mathbf s}_i
+\mathbf v_{c,i}\cdot\hat{\mathbf d}_i
 +
 \rho_i\dot\theta_i.
 $$
@@ -199,10 +213,10 @@ The transverse slip velocity is
 $$
 v_{T,i}
 =
-\mathbf v_{c,i}\cdot\hat{\mathbf r}_i.
+\mathbf v_{c,i}\cdot\hat{\mathbf a}_i.
 $$
 
-There is no $\dot\theta_i$ term in $v_{T,i}$ because wheel rotation produces peripheral velocity along $\hat{\mathbf s}_i$, not along the axle direction $\hat{\mathbf r}_i$.
+There is no $\dot\theta_i$ term in $v_{T,i}$ because wheel rotation produces peripheral velocity along $\hat{\mathbf d}_i$, not along the axle direction $\hat{\mathbf a}_i$.
 
 These are the two slip velocities that drive the friction model.
 
@@ -451,9 +465,9 @@ $$
 =
 -N_i
 \left[
-\mu_W(v_{W,i})\hat{\mathbf s}_i
+\mu_W(v_{W,i})\hat{\mathbf d}_i
 +
-\mu_T(v_{T,i})\hat{\mathbf r}_i
+\mu_T(v_{T,i})\hat{\mathbf a}_i
 \right]
 }
 $$
@@ -618,9 +632,9 @@ $$
 =
 -N_i
 \left[
-\mu_W(v_{W,i})\hat{\mathbf s}_i
+\mu_W(v_{W,i})\hat{\mathbf d}_i
 +
-\mu_T(v_{T,i})\hat{\mathbf r}_i
+\mu_T(v_{T,i})\hat{\mathbf a}_i
 \right]
 }
 $$
@@ -632,7 +646,7 @@ $$
 v_{W,i}
 =
 (\mathbf V_G+\boldsymbol\omega\times\mathbf p_i)
-\cdot\hat{\mathbf s}_i
+\cdot\hat{\mathbf d}_i
 +
 \rho_i u_i
 }
@@ -643,7 +657,7 @@ $$
 v_{T,i}
 =
 (\mathbf V_G+\boldsymbol\omega\times\mathbf p_i)
-\cdot\hat{\mathbf r}_i.
+\cdot\hat{\mathbf a}_i.
 }
 $$
 

@@ -46,18 +46,22 @@ In this model, wheel angular velocity is therefore an input, not a motor torque 
 
 ---
 
+> **Project notation:** Williams et al. use $\hat r_i$ for the wheel axle direction and $\hat s_i$ for the wheel drive direction. This project uses $\hat a_i$ for the **axial/perpendicular** direction and $\hat d_i$ for the **drive/traction** direction. This is only a notation change; the physical model is unchanged.
+>
+> \[\hat{\mathbf a}_i\equiv\hat{\mathbf r}_i^{\mathrm{Williams}},\qquad \hat{\mathbf d}_i\equiv\hat{\mathbf s}_i^{\mathrm{Williams}}\]
+>
 ## 2. Wheel coordinate system
 
 For wheel i:
 
 - $\mathbf p_i$ is the vector from the robot centre to the wheel centre
-- $\hat{\mathbf r}_i$ is the wheel axle direction
-- $\hat{\mathbf s}_i$ is the wheel drive/peripheral direction
+- $\hat{\mathbf a}_i$ is the axial/perpendicular direction
+- $\hat{\mathbf d}_i$ is the wheel drive/traction direction
 
 The current code assumes the axle is radial:
 
 ```math
-\hat{\mathbf r}_i
+\hat{\mathbf a}_i
 =
 \begin{bmatrix}
 \cos\alpha_i\\
@@ -68,7 +72,7 @@ The current code assumes the axle is radial:
 and the drive direction is tangential:
 
 ```math
-\hat{\mathbf s}_i
+\hat{\mathbf d}_i
 =
 \begin{bmatrix}
 -\sin\alpha_i\\
@@ -108,16 +112,26 @@ Therefore,
 ```
 
 ```math
-\hat{\mathbf r}_i=\mathbf R(\phi)\hat{\mathbf r}_{i,M},
+\hat{\mathbf a}_i=\mathbf R(\phi)\hat{\mathbf a}_{i,M},
 ```
 
 ```math
-\hat{\mathbf s}_i=\mathbf R(\phi)\hat{\mathbf s}_{i,M}.
+\hat{\mathbf d}_i=\mathbf R(\phi)\hat{\mathbf d}_{i,M}.
 ```
 
 This matches the frame transformation used by Williams.
 
 ---
+
+## Geometry diagrams
+
+These are original redrawings of the relevant Williams geometry using this project's $\hat d/\hat a$ notation. The original paper is linked for comparison.
+
+![Robot frame and wheel directions](docs/figures/wheel_frame.svg)
+
+![Wheel contact and roller-gap geometry](docs/figures/roller_gap_geometry.svg)
+
+Original reference: [Williams et al. (2002)](https://people.ohio.edu/williams/html/PDF/IEEETRA02.pdf)
 
 ## 3. Wheel contact-point kinematics
 
@@ -186,7 +200,7 @@ Williams defines the wheel angular-velocity vector as
 ```math
 \boldsymbol{\dot{\theta}}_i
 =
-\dot{\theta}_i\hat{\mathbf r}_i
+\dot{\theta}_i\hat{\mathbf a}_i
 ```
 
 and the wheel-centre-to-contact radius vector as $\boldsymbol{\rho}_i$.
@@ -201,7 +215,7 @@ The peripheral contact velocity is
 \boldsymbol{\rho}_i.
 ```
 
-Because $\hat{\mathbf r}_i$ and $\hat{\mathbf s}_i$ are perpendicular, the magnitude of the peripheral velocity is
+Because $\hat{\mathbf a}_i$ and $\hat{\mathbf d}_i$ are perpendicular, the magnitude of the peripheral velocity is
 
 ```math
 \rho_i\dot{\theta}_i.
@@ -213,13 +227,13 @@ The current code uses the equivalent scalar projection directly in the longitudi
 +\rho_i\dot{\theta}_i.
 ```
 
-The sign is a convention determined by the chosen positive theta_i direction and s_hat_i. The current code uses that convention consistently in both inverse kinematics and the plant model.
+The sign is a convention determined by the chosen positive theta_i direction and d_hat_i. The current code uses that convention consistently in both inverse kinematics and the plant model.
 
 ---
 
 ## 5. Longitudinal slip
 
-Williams' longitudinal sliding velocity is obtained by projecting the contact-point velocity onto s_hat_i.
+Williams' longitudinal sliding velocity is obtained by projecting the contact-point velocity onto d_hat_i.
 
 The implementation is
 
@@ -227,7 +241,7 @@ The implementation is
 \boxed{
 v_{W,i}
 =
-\mathbf v_{c,i}\cdot\hat{\mathbf s}_i
+\mathbf v_{c,i}\cdot\hat{\mathbf d}_i
 +
 \rho_i u_i
 }
@@ -249,7 +263,7 @@ The code's inverse-kinematics helper chooses
 u_i
 =
 -\frac{
-\mathbf v_{c,i}^{cmd}\cdot\hat{\mathbf s}_i
+\mathbf v_{c,i}^{cmd}\cdot\hat{\mathbf d}_i
 }{\rho_i}
 ```
 
@@ -265,13 +279,13 @@ That is internally consistent with the plant's sign convention.
 
 ## 6. Transverse slip
 
-Williams defines transverse sliding velocity by projecting the contact-point velocity onto the wheel axle direction:
+Williams defines transverse sliding velocity by projecting the contact-point velocity onto the axial/perpendicular direction:
 
 ```math
 \boxed{
 v_{T,i}
 =
-\mathbf v_{c,i}\cdot\hat{\mathbf r}_i
+\mathbf v_{c,i}\cdot\hat{\mathbf a}_i
 }
 ```
 
@@ -527,9 +541,9 @@ Williams' friction force on wheel i is
 =
 -N_i
 \left[
-\mu_W(v_{W,i})\hat{\mathbf s}_i
+\mu_W(v_{W,i})\hat{\mathbf d}_i
 +
-\mu_T(v_{T,i})\hat{\mathbf r}_i
+\mu_T(v_{T,i})\hat{\mathbf a}_i
 \right].
 }
 ```
@@ -555,9 +569,9 @@ F_i
 =
 -\frac{mg}{4}
 \left[
-\mu_W\hat{\mathbf s}_i
+\mu_W\hat{\mathbf d}_i
 +
-\mu_T\hat{\mathbf r}_i
+\mu_T\hat{\mathbf a}_i
 \right].
 ```
 
@@ -726,7 +740,7 @@ v_{W,i}
 \boldsymbol\omega\times\mathbf p_i
 \right)
 \cdot
-\hat{\mathbf s}_i
+\hat{\mathbf d}_i
 +
 \rho_i u_i
 }
@@ -741,7 +755,7 @@ v_{T,i}
 \boldsymbol\omega\times\mathbf p_i
 \right)
 \cdot
-\hat{\mathbf r}_i
+\hat{\mathbf a}_i
 }
 ```
 
@@ -753,9 +767,9 @@ and
 =
 -N_i
 \left[
-\mu_W(v_{W,i})\hat{\mathbf s}_i
+\mu_W(v_{W,i})\hat{\mathbf d}_i
 +
-\mu_T(v_{T,i})\hat{\mathbf r}_i
+\mu_T(v_{T,i})\hat{\mathbf a}_i
 \right].
 }
 ```
@@ -845,7 +859,7 @@ v_{drive,i}^{cmd}
 \boldsymbol\omega^{cmd}\times\mathbf p_i
 \right)
 \cdot
-\hat{\mathbf s}_i
+\hat{\mathbf d}_i
 ```
 
 and therefore

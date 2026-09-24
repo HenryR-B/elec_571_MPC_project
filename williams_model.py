@@ -25,17 +25,17 @@ The control input is
 
     u_i = theta_dot_i
 
-where positive theta_dot_i follows the wheel axle direction r_hat_i. With the
+where positive theta_dot_i follows the wheel axial direction a_hat_i. With the
 wheel-frame convention used here, the wheel peripheral speed is +rho*u_i in
-s_hat_i, matching Eq. (2)-(3) of Williams et al.
+d_hat_i, matching Eq. (2)-(3) of Williams et al.
 
 Williams' improved friction model
 ----------------------------------
 For each wheel:
 
     v_contact_i = V_G + omega x r_i
-    v_W_i       = v_contact_i . s_hat_i + rho_i * u_i
-    v_T_i       = v_contact_i . r_hat_i
+    v_W_i       = v_contact_i . d_hat_i + rho_i * u_i
+    v_T_i       = v_contact_i . a_hat_i
 
 The friction coefficient is selected from the current wheel angle theta_i:
 
@@ -48,7 +48,7 @@ and
 
 The force exerted by the surface on the robot is
 
-    F_i = -(mg/N) * [mu_W(v_W_i) s_hat_i + mu_T(v_T_i) r_hat_i]
+    F_i = -(mg/N) * [mu_W(v_W_i) d_hat_i + mu_T(v_T_i) a_hat_i]
 
 The body dynamics are
 
@@ -183,18 +183,18 @@ def rotation_matrix(phi: float) -> np.ndarray:
 
 
 def wheel_frames(wheels: Iterable[Wheel]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return wheel positions, drive directions, and axle directions in body frame."""
+    """Return wheel positions, drive directions, and axial directions in body frame."""
     wheels = tuple(wheels)
     alpha = np.radians([w.alpha_deg for w in wheels])
     dist = np.array([w.r_dist for w in wheels], dtype=float)
 
-    # Conventional radial-axle omni-wheel layout.
-    r_hat = np.stack([np.cos(alpha), np.sin(alpha)], axis=1)
-    s_hat = np.stack([-np.sin(alpha), np.cos(alpha)], axis=1)
+    # Project convention:
+    #   d_hat = drive/traction direction (tangential)
+    #   a_hat = axial/perpendicular direction (radial)
+    a_hat = np.stack([np.cos(alpha), np.sin(alpha)], axis=1)
+    d_hat = np.stack([-np.sin(alpha), np.cos(alpha)], axis=1)
     p = np.stack([dist * np.cos(alpha), dist * np.sin(alpha)], axis=1)
-    return p, s_hat, r_hat
-
-
+    return p, d_hat, a_hat
 def smooth_friction_coefficient(v_slip: np.ndarray | float, mu_max: float, k: float) -> np.ndarray:
     """Williams Eq. (11), retaining the sign of the sliding velocity."""
     return mu_max * (2.0 / np.pi) * np.arctan(k * np.asarray(v_slip, dtype=float))
@@ -238,11 +238,11 @@ def wheel_speeds_from_body_command(
         raise ValueError("command must be [vx, vy] or [vx, vy, omega]")
 
     v_body = np.array([vx_cmd, vy_cmd], dtype=float)
-    p_body, s_body, _ = wheel_frames(wheels)
+    p_body, d_body, _ = wheel_frames(wheels)
     contact_body = v_body + np.stack(
         (-omega_cmd * p_body[:, 1], omega_cmd * p_body[:, 0]), axis=1
     )
-    v_drive = np.einsum("ij,ij->i", contact_body, s_body)
+    v_drive = np.einsum("ij,ij->i", contact_body, d_body)
     rho = np.array([wheel.rho for wheel in wheels], dtype=float)
 
     # Williams' longitudinal slip is:
@@ -279,19 +279,19 @@ def contact_kinematics(
     V_world = np.asarray(state[3:5], dtype=float)
     omega = float(state[5])
 
-    p_body, s_body, r_body = wheel_frames(wheels)
+    p_body, d_body, a_body = wheel_frames(wheels)
     R = rotation_matrix(phi)
     p_world = p_body @ R.T
-    s_world = s_body @ R.T
-    r_world = r_body @ R.T
+    d_world = d_body @ R.T
+    a_world = a_body @ R.T
 
     omega_cross_r = np.stack((-omega * p_world[:, 1], omega * p_world[:, 0]), axis=1)
     v_contact = V_world + omega_cross_r
 
-    v_W = np.einsum("ij,ij->i", v_contact, s_world)
+    v_W = np.einsum("ij,ij->i", v_contact, d_world)
     rho = np.array([w.rho for w in wheels], dtype=float)
     v_W = v_W + rho * wheel_speeds
-    v_T = np.einsum("ij,ij->i", v_contact, r_world)
+    v_T = np.einsum("ij,ij->i", v_contact, a_world)
     return v_contact, v_W, v_T, wheel_speeds
 
 
@@ -309,11 +309,11 @@ def wheel_forces(
 
     v_contact, v_W, v_T, theta_dot = contact_kinematics(state, wheel_speeds, wheels)
 
-    p_body, s_body, r_body = wheel_frames(wheels)
+    p_body, d_body, a_body = wheel_frames(wheels)
     R = rotation_matrix(float(state[2]))
     p_world = p_body @ R.T
-    s_world = s_body @ R.T
-    r_world = r_body @ R.T
+    d_world = d_body @ R.T
+    a_world = a_body @ R.T
 
     normal_load = params.mass * params.g / len(wheels)
     mu_W = np.empty(len(wheels), dtype=float)
@@ -329,7 +329,7 @@ def wheel_forces(
             mu_W[i] = smooth_friction_coefficient(v_W[i], params.mu_W_gap, params.k)
             mu_T[i] = smooth_friction_coefficient(v_T[i], params.mu_T_gap, params.k)
 
-    F = -normal_load * (mu_W[:, None] * s_world + mu_T[:, None] * r_world)
+    F = -normal_load * (mu_W[:, None] * d_world + mu_T[:, None] * a_world)
 
     tau_z = p_world[:, 0] * F[:, 1] - p_world[:, 1] * F[:, 0]
 
@@ -344,8 +344,8 @@ def wheel_forces(
         "mu_T": mu_T,
         "roller_contact": roller,
         "position_world": p_world,
-        "s_world": s_world,
-        "r_world": r_world,
+        "d_world": d_world,
+        "a_world": a_world,
     }
 
 

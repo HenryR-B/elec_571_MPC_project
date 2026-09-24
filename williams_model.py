@@ -120,13 +120,42 @@ class ModelParams:
             raise ValueError("k must be positive")
 
 
-# Current robot geometry carried over from the project files.
-# These values remain explicitly editable until checked against CAD.
+# Current robot geometry.
+#
+# The roller/gap geometry is derived from the measured wheel dimensions:
+#   inner roller-to-roller diameter = 31.04270 mm
+#   outer roller-to-roller diameter = 59.82900 mm
+#   roller diameter = (59.82900 - 31.04270) / 2 = 14.39315 mm
+#   roller radius = 7.196575 mm
+#
+# The 5.59634 mm measurement is the GAP at the roller CENTER, not the floor
+# contact gap. Extrapolating from the measured minimum gap gives:
+#   floor-contact gap = 5.59634 + (5.59634 - 3.06464) = 8.12804 mm
+#
+# At the 29.915 mm wheel contact radius, that gap subtends 15.615808 deg of
+# each 22.5 deg roller pitch, leaving 6.884192 deg of actual roller contact.
+# Therefore the roller fraction is 0.3059640765.
+ROLLER_COUNT = 16
+WHEEL_CONTACT_RADIUS = 29.915e-3
+ROLLER_INNER_DIAMETER = 31.04270e-3
+ROLLER_OUTER_DIAMETER = 59.82900e-3
+ROLLER_DIAMETER = (ROLLER_OUTER_DIAMETER - ROLLER_INNER_DIAMETER) / 2.0
+ROLLER_RADIUS = ROLLER_DIAMETER / 2.0
+ROLLER_MIN_GAP = 3.06464e-3
+ROLLER_CENTER_GAP = 5.59634e-3
+ROLLER_FLOOR_GAP = ROLLER_CENTER_GAP + (ROLLER_CENTER_GAP - ROLLER_MIN_GAP)
+ROLLER_PITCH_DEG = 360.0 / ROLLER_COUNT
+ROLLER_GAP_ANGLE_DEG = 2.0 * np.degrees(
+    np.arcsin(ROLLER_FLOOR_GAP / (2.0 * WHEEL_CONTACT_RADIUS))
+)
+ROLLER_CONTACT_ANGLE_DEG = ROLLER_PITCH_DEG - ROLLER_GAP_ANGLE_DEG
+ROLLER_FRACTION = ROLLER_CONTACT_ANGLE_DEG / ROLLER_PITCH_DEG
+
 ROBOT_WHEELS = (
-    Wheel("front-left", 60.0, 0.076, 0.029915, 16, 0.85),
-    Wheel("front-right", -60.0, 0.076, 0.029915, 16, 0.85),
-    Wheel("back-left", 135.0, 0.076, 0.029915, 16, 0.85),
-    Wheel("back-right", -135.0, 0.076, 0.029915, 16, 0.85),
+    Wheel("front-left", 60.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
+    Wheel("front-right", -60.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
+    Wheel("back-left", 135.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
+    Wheel("back-right", -135.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
 )
 
 # Williams' measured friction values for carpet (Table I). These are reference

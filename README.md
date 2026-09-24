@@ -14,7 +14,7 @@ This README describes the equations that are actually implemented in the current
 
 ## 1. State and input
 
-The continuous state used by williams_model.py is
+The continuous state used by `williams_model.py` is
 
 ```math
 \mathbf{x}
@@ -46,9 +46,9 @@ In this model, wheel angular velocity is therefore an input, not a motor torque 
 
 ---
 
-> **Project notation:** Williams et al. use $\hat r_i$ for the wheel axle direction and $\hat s_i$ for the wheel drive direction. This project uses $\hat a_i$ for the **axial/perpendicular** direction and $\hat d_i$ for the **drive/traction** direction. This is only a notation change; the physical model is unchanged.
+> **Project notation:** Williams et al. use the paper uses different symbols for the axial and drive directions. This project uses $\hat a_i$ for the **axial/perpendicular** direction and $\hat d_i$ for the **drive/traction** direction. This is only a notation change; the physical model is unchanged.
 >
-> \[\hat{\mathbf a}_i\equiv\hat{\mathbf r}_i^{\mathrm{Williams}},\qquad \hat{\mathbf d}_i\equiv\hat{\mathbf s}_i^{\mathrm{Williams}}\]
+> \[\hat{\mathbf a}_i\equiv\hat{\mathbf a}_i^{\mathrm{Williams}},\qquad \hat{\mathbf d}_i\equiv\hat{\mathbf d}_i^{\mathrm{Williams}}\]
 >
 ## 2. Wheel coordinate system
 
@@ -85,7 +85,7 @@ The wheel position is
 ```math
 \mathbf p_{i,M}
 =
-r_i
+p_i
 \begin{bmatrix}
 \cos\alpha_i\\
 \sin\alpha_i
@@ -123,15 +123,16 @@ This matches the frame transformation used by Williams.
 
 ---
 
-## Geometry diagrams
+## Original paper figures
 
-These are original redrawings of the relevant Williams geometry using this project's $\hat d/\hat a$ notation. The original paper is linked for comparison.
+The original Williams paper contains the relevant diagrams on **PDF page 3**:
 
-![Robot frame and wheel directions](docs/figures/wheel_frame.svg)
+- **Fig. 3:** Omni-Directional Robot Model, Top View
+- **Fig. 5:** Wheel Detail
 
-![Wheel contact and roller-gap geometry](docs/figures/roller_gap_geometry.svg)
+[Open the original paper directly to page 3](https://people.ohio.edu/williams/html/PDF/IEEETRA02.pdf)
 
-Original reference: [Williams et al. (2002)](https://people.ohio.edu/williams/html/PDF/IEEETRA02.pdf)
+The equations in this repository use the project's $\hat a_i$ and $\hat d_i$ notation throughout.
 
 ## 3. Wheel contact-point kinematics
 
@@ -142,7 +143,7 @@ Williams defines the instantaneous velocity of the point on wheel i that contact
 =
 \mathbf V_G
 +
-\boldsymbol{\omega}\times\mathbf r_i
+\boldsymbol{\omega}\times\mathbf p_i
 +
 \mathbf v_{r,i}.
 ```
@@ -412,7 +413,7 @@ The code does not give each passive roller its own angular-velocity state or ine
 
 ## 9. Current wheel geometry
 
-The current wheel geometry in williams_model.py is derived from the measured dimensions:
+The current wheel geometry in `williams_model.py` is derived from the measured dimensions:
 
 ```math
 D_{\mathrm{inner}}=31.04270\ \mathrm{mm}

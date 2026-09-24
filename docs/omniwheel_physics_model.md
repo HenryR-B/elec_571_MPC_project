@@ -50,9 +50,9 @@ These omissions are model assumptions, not accidental missing equations. William
 
 ---
 
-> **Project notation:** Williams et al. use $\hat r_i$ for the wheel axle direction and $\hat s_i$ for the wheel drive direction. This project uses $\hat a_i$ for the **axial/perpendicular** direction and $\hat d_i$ for the **drive/traction** direction. This is only a notation change; the physical model is unchanged.
+> **Project notation:** Williams et al. use the paper uses different symbols for the axial and drive directions. This project uses $\hat a_i$ for the **axial/perpendicular** direction and $\hat d_i$ for the **drive/traction** direction. This is only a notation change; the physical model is unchanged.
 >
-> \[\hat{\mathbf a}_i\equiv\hat{\mathbf r}_i^{\mathrm{Williams}},\qquad \hat{\mathbf d}_i\equiv\hat{\mathbf s}_i^{\mathrm{Williams}}\]
+> \[\hat{\mathbf a}_i\equiv\hat{\mathbf a}_i^{\mathrm{Williams}},\qquad \hat{\mathbf d}_i\equiv\hat{\mathbf d}_i^{\mathrm{Williams}}\]
 >
 # 2. Coordinate systems and wheel geometry
 
@@ -111,15 +111,16 @@ For the current wheel arrangement, the wheel axle points radially from the robot
 
 ---
 
-## Geometry diagrams
+## Original paper figures
 
-These are original redrawings of the relevant Williams geometry using this project's $\hat d/\hat a$ notation. The original paper is linked for comparison.
+The original Williams paper contains the relevant diagrams on **PDF page 3**:
 
-![Robot frame and wheel directions](figures/wheel_frame.svg)
+- **Fig. 3:** Omni-Directional Robot Model, Top View
+- **Fig. 5:** Wheel Detail
 
-![Wheel contact and roller-gap geometry](figures/roller_gap_geometry.svg)
+[Open the original paper directly to page 3](https://people.ohio.edu/williams/html/PDF/IEEETRA02.pdf)
 
-Original reference: [Williams et al. (2002)](https://people.ohio.edu/williams/html/PDF/IEEETRA02.pdf)
+The equations in this repository use the project's $\hat a_i$ and $\hat d_i$ notation throughout.
 
 # 3. Contact-point kinematics
 

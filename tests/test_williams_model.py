@@ -100,6 +100,41 @@ class WilliamsModelTests(unittest.TestCase):
         )
         self.assertTrue(np.all(power_like <= 1e-10))
 
+    def test_body_command_generates_zero_slip_at_the_commanded_twist(self):
+        state = self.state.copy()
+        state[2] = 0.73
+        command = np.array([0.62, -0.24, 0.81])
+
+        wheel_speeds = wm.wheel_speeds_from_body_command(command, self.wheels)
+
+        R = wm.rotation_matrix(state[2])
+        state[3:5] = R @ command[:2]
+        state[5] = command[2]
+
+        data = wm.wheel_forces(state, wheel_speeds, self.params, self.wheels)
+        np.testing.assert_allclose(data["v_W"], 0.0, atol=1e-12)
+
+    def test_xy_only_command_defaults_to_zero_yaw_rate(self):
+        command = np.array([0.5, -0.3])
+        wheel_speeds = wm.wheel_speeds_from_body_command(command, self.wheels)
+        wheel_speeds_3 = wm.wheel_speeds_from_body_command(
+            np.array([0.5, -0.3, 0.0]), self.wheels
+        )
+        np.testing.assert_allclose(wheel_speeds, wheel_speeds_3, atol=1e-12)
+
+    def test_initial_command_zero_keeps_robot_at_rest(self):
+        t, x, wheel_speeds = wm.simulate_initial_command(
+            self.state,
+            command=np.array([0.0, 0.0]),
+            duration=0.05,
+            dt=0.001,
+            params=self.params,
+            wheels=self.wheels,
+        )
+        np.testing.assert_allclose(wheel_speeds, 0.0, atol=1e-12)
+        np.testing.assert_allclose(x, self.state, atol=1e-12)
+        self.assertEqual(len(t), len(x))
+
     def test_continuous_dynamics_shape_and_wheel_angle_rate(self):
         state = self.state.copy()
         u = np.array([1.0, -2.0, 3.0, -4.0])

@@ -183,6 +183,44 @@ def is_roller_contact(theta: float, wheel: Wheel) -> bool:
     return roller_phase(theta, wheel) < wheel.roller_fraction * pitch
 
 
+def wheel_speeds_from_body_command(
+    command: np.ndarray | list[float] | tuple[float, ...],
+    wheels: Iterable[Wheel] = ROBOT_WHEELS,
+) -> np.ndarray:
+    """Convert one body-frame joystick velocity command to wheel speeds.
+
+    command is [vx_cmd, vy_cmd] or [vx_cmd, vy_cmd, omega_cmd].
+
+    This is an inverse-kinematics initialization only. The returned wheel
+    speeds are intended to be held constant during an open-loop plant
+    simulation. The command is NOT reapplied as feedback at every timestep.
+
+    The sign is chosen so that, if the robot actually reaches the commanded
+    body twist, v_W = 0 for every wheel.
+    """
+    wheels = tuple(wheels)
+    command = np.asarray(command, dtype=float)
+    if command.shape == (2,):
+        vx_cmd, vy_cmd = command
+        omega_cmd = 0.0
+    elif command.shape == (3,):
+        vx_cmd, vy_cmd, omega_cmd = command
+    else:
+        raise ValueError("command must be [vx, vy] or [vx, vy, omega]")
+
+    v_body = np.array([vx_cmd, vy_cmd], dtype=float)
+    p_body, s_body, _ = wheel_frames(wheels)
+    contact_body = v_body + np.stack(
+        (-omega_cmd * p_body[:, 1], omega_cmd * p_body[:, 0]), axis=1
+    )
+    v_drive = np.einsum("ij,ij->i", contact_body, s_body)
+    rho = np.array([wheel.rho for wheel in wheels], dtype=float)
+
+    # Williams' longitudinal slip is:
+    #     v_W = v_drive + rho * theta_dot.
+    # Set v_W = 0 to obtain the ideal wheel-speed command.
+    return -v_drive / rho
+
 def contact_kinematics(
     state: np.ndarray,
     wheel_speeds: np.ndarray,
@@ -358,6 +396,43 @@ def simulate(
 
     return t, x
 
+
+def simulate_initial_command(
+    x0: np.ndarray,
+    command: np.ndarray | list[float] | tuple[float, ...],
+    duration: float,
+    dt: float,
+    params: ModelParams,
+    wheels: Iterable[Wheel] = ROBOT_WHEELS,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Simulate one initial joystick command with fixed wheel speeds.
+
+    The body-frame command is converted to wheel angular velocities once at
+    t=0. Those wheel speeds are then held constant for the entire simulation.
+    There is no closed-loop velocity correction. Therefore the resulting
+    trajectory is the plant's response to the initial command, including any
+    lateral or yaw motion caused by the roller/gap friction model.
+
+    Returns
+    -------
+    t : (K,)
+        Simulation times.
+    x : (K, state_dim)
+        Plant state history.
+    wheel_speeds : (N,)
+        The constant wheel speeds generated from the initial command.
+    """
+    wheels = tuple(wheels)
+    wheel_speeds = wheel_speeds_from_body_command(command, wheels)
+    t, x = simulate(
+        x0=x0,
+        wheel_speed_fn=lambda _t: wheel_speeds,
+        duration=duration,
+        dt=dt,
+        params=params,
+        wheels=wheels,
+    )
+    return t, x, wheel_speeds
 
 def make_rest_state(wheels: Iterable[Wheel] = ROBOT_WHEELS) -> np.ndarray:
     """Convenience constructor for a zero state with one angle per wheel."""

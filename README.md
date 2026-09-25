@@ -21,7 +21,7 @@ The continuous state used by `williams_model.py` is
 =
 \begin{bmatrix}
 x & y & \phi & V_x & V_y & \omega &
-\theta_1 & \cdots & \theta_N
+\theta_1 & \theta_2 & \theta_3 & \theta_4
 \end{bmatrix}^{T}.
 ```
 
@@ -31,7 +31,7 @@ Where:
 - $\phi$: robot yaw angle
 - $V_x,V_y$: robot centre velocity in the inertial frame
 - $\omega=\dot{\phi}$: robot yaw rate
-- $\theta_i$: wheel rotation angle used to determine roller/gap contact
+- $\theta_i$: wheel rotation angle used to determine roller/gap contact. For simplicity, we will assign: 1-front left, 2-front-right, 3-back-right, 4-back-left.
 - $N$: number of driven omni-wheels, four for the current robot
 
 The plant input is

@@ -108,15 +108,15 @@ The body-to-inertial rotation matrix used by the code is
 Therefore,
 
 ```math
-\mathbf p_i=\mathbf R(\phi)\mathbf p_{i,M},
+\mathbf p_i=\mathbf R(\phi) * \mathbf p_{i,M},
 ```
 
 ```math
-\hat{\mathbf a}_i=\mathbf R(\phi)\hat{\mathbf a}_{i,M},
+\hat{\mathbf a}_i=\mathbf R(\phi) * \hat{\mathbf a}_{i,M},
 ```
 
 ```math
-\hat{\mathbf d}_i=\mathbf R(\phi)\hat{\mathbf d}_{i,M}.
+\hat{\mathbf d}_i=\mathbf R(\phi) * \hat{\mathbf d}_{i,M}.
 ```
 
 ---
@@ -130,7 +130,7 @@ The original Williams paper contains the relevant diagrams on **PDF page 3**:
 
 [Open the original paper directly to page 3](https://people.ohio.edu/williams/html/PDF/IEEETRA02.pdf)
 
-The equations in this repository use the project's $\hat a_i$ and $\hat d_i$ notation throughout.
+The equations in this repository use the project's $\hat a_i$ and $\hat d_i$ notation throughout. In written equations, `·` denotes a dot product, `×` denotes a cross product, and `*` denotes ordinary multiplication.
 
 ## 3. Wheel contact-point kinematics
 
@@ -199,7 +199,7 @@ Williams defines the wheel angular-velocity vector as
 ```math
 \boldsymbol{\dot{\theta}}_i
 =
-\dot{\theta}_i\hat{\mathbf a}_i
+\dot{\theta}_i * \hat{\mathbf a}_i
 ```
 
 and the wheel-centre-to-contact radius vector as $\boldsymbol{\rho}_i$.
@@ -242,7 +242,7 @@ v_{W,i}
 =
 \mathbf v_{c,i}\cdot\hat{\mathbf d}_i
 +
-\rho_i u_i
+\rho_i * u_i
 }
 ```
 
@@ -540,9 +540,9 @@ Williams' friction force on wheel i is
 =
 -N_i
 \left[
-\mu_W(v_{W,i})\hat{\mathbf d}_i
+\mu_W(v_{W,i}) * \hat{\mathbf d}_i
 +
-\mu_T(v_{T,i})\hat{\mathbf a}_i
+\mu_T(v_{T,i}) * \hat{\mathbf a}_i
 \right].
 }
 ```
@@ -550,14 +550,14 @@ Williams' friction force on wheel i is
 The current implementation uses equal static loading:
 
 ```math
-N_i=\frac{mg}{N}.
+N_i=\frac{m * g}{N}.
 ```
 
 For the four-wheel robot:
 
 ```math
 \boxed{
-N_i=\frac{mg}{4}.
+N_i=\frac{m * g}{4}.
 }
 ```
 
@@ -566,7 +566,7 @@ The Python code then evaluates
 ```math
 F_i
 =
--\frac{mg}{4}
+-\frac{m * g}{4}
 \left[
 \mu_W\hat{\mathbf d}_i
 +
@@ -741,7 +741,7 @@ v_{W,i}
 \cdot
 \hat{\mathbf d}_i
 +
-\rho_i u_i
+\rho_i * u_i
 }
 ```
 
@@ -766,9 +766,9 @@ and
 =
 -N_i
 \left[
-\mu_W(v_{W,i})\hat{\mathbf d}_i
+\mu_W(v_{W,i}) * \hat{\mathbf d}_i
 +
-\mu_T(v_{T,i})\hat{\mathbf a}_i
+\mu_T(v_{T,i}) * \hat{\mathbf a}_i
 \right].
 }
 ```

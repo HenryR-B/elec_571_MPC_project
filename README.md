@@ -46,9 +46,11 @@ In this model, wheel angular velocity is therefore an input, not a motor torque 
 
 ---
 
-> **Project notation:** Williams et al. use the paper uses different symbols for the axial and drive directions. This project uses $\hat a_i$ for the **axial/perpendicular** direction and $\hat d_i$ for the **drive/traction** direction. This is only a notation change; the physical model is unchanged.
+> **Project notation:** Williams et al. use the paper uses different symbols for the axial and drive directions. This project uses $\hat a_i$ for the **axial** direction and $\hat d_i$ for the **drive** direction. This is only a notation change; the physical model is unchanged.
 >
-> \[\hat{\mathbf a}_i\equiv\hat{\mathbf a}_i^{\mathrm{Williams}},\qquad \hat{\mathbf d}_i\equiv\hat{\mathbf d}_i^{\mathrm{Williams}}\]
+> ```math
+> \hat{\mathbf a}_i \equiv\hat{\mathbf r}_i^{\mathrm{Williams}},\qquad \hat{\mathbf d}_i \equiv\hat{\mathbf s}_i^{\mathrm{Williams}}
+> ```
 >
 ## 2. Wheel coordinate system
 

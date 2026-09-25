@@ -34,13 +34,9 @@ Where:
 - $\theta_i$: wheel rotation angle used to determine roller/gap contact. For simplicity, we will assign: 1-front left, 2-front-right, 3-back-right, 4-back-left.
 - $N$: number of driven omni-wheels, four for the current robot
 
-The plant input is
+The plant input is the wheel angular velocity $\dot{\theta}_i$ for each wheel. In the Python code, the full input vector is `theta_dot`, so `theta_dot[i]` is the angular velocity of wheel $i$.
 
-```math
-\dot{\theta}_i
-```
-
-for each wheel.
+It is an input, not a motor torque or PWM command.
 
 In this model, wheel angular velocity is therefore an input, not a motor torque or PWM command.
 
@@ -82,12 +78,12 @@ and the drive direction is tangential:
 \end{bmatrix}.
 ```
 
-The wheel position is
+The wheel position is fixed in the robot body frame:
 
 ```math
 \mathbf p_{i,M}
 =
-p_i
+WHEEL_CENTER_DISTANCE
 \begin{bmatrix}
 \cos\alpha_i\\
 \sin\alpha_i
@@ -202,7 +198,7 @@ Williams defines the wheel angular-velocity vector as
 \dot{\theta}_i * \hat{\mathbf a}_i
 ```
 
-and the wheel-centre-to-contact radius vector as $\boldsymbol{\rho}_i$.
+and the wheel-centre-to-contact radius vector as $\boldsymbol{\mathrm{WHEEL\_RADIUS}}_i$.
 
 The peripheral contact velocity is
 
@@ -211,19 +207,19 @@ The peripheral contact velocity is
 =
 \boldsymbol{\dot{\theta}}_i
 \times
-\boldsymbol{\rho}_i.
+\boldsymbol{\mathrm{WHEEL\_RADIUS}}_i.
 ```
 
 Because $\hat{\mathbf a}_i$ and $\hat{\mathbf d}_i$ are perpendicular, the magnitude of the peripheral velocity is
 
 ```math
-\WHEEL_RADIUS\dot{\theta}_i.
+\mathrm{WHEEL\_RADIUS}\dot{\theta}_i.
 ```
 
 The current code uses the equivalent scalar projection directly in the longitudinal slip equation:
 
 ```math
-+\WHEEL_RADIUS\dot{\theta}_i.
++\mathrm{WHEEL\_RADIUS}\dot{\theta}_i.
 ```
 
 The sign is a convention determined by the chosen positive theta_i direction and d_hat_i. The current code uses that convention consistently in both inverse kinematics and the plant model.
@@ -242,7 +238,7 @@ v_{W,i}
 =
 \mathbf v_{c,i}\cdot\hat{\mathbf d}_i
 +
-\WHEEL_RADIUS * \dot{\theta}_i
+\mathrm{WHEEL\_RADIUS} * \dot{\theta}_i
 }
 ```
 
@@ -263,7 +259,7 @@ The code's inverse-kinematics helper chooses
 =
 -\frac{
 \mathbf v_{c,i}^{cmd}\cdot\hat{\mathbf d}_i
-}{\WHEEL_RADIUS}
+}{\mathrm{WHEEL\_RADIUS}}
 ```
 
 so that the commanded ideal motion satisfies
@@ -377,7 +373,7 @@ such that
 }
 ```
 
-The current code represents this using `roller_fraction`:
+The current code represents this using `ROLLER_FRACTION`:
 
 ```math
 f_r
@@ -447,11 +443,11 @@ R_{\mathrm{roller}}=7.196575\ \mathrm{mm}.
 }
 ```
 
-The wheel contact radius currently used by the code is
+The wheel radius used by the code is
 
 ```math
 \boxed{
-\rho=29.915\ \mathrm{mm}.
+\mathrm{WHEEL\_RADIUS}=29.915\ \mathrm{mm}.
 }
 ```
 
@@ -492,7 +488,7 @@ The code then interprets that value as a chord width at the wheel contact radius
 =
 2\sin^{-1}
 \left(
-\frac{g_{\mathrm{floor}}}{2\rho}
+\frac{g_{\mathrm{floor}}}{2\mathrm{WHEEL\_RADIUS}}
 \right).
 ```
 
@@ -741,7 +737,7 @@ v_{W,i}
 \cdot
 \hat{\mathbf d}_i
 +
-\WHEEL_RADIUS * \dot{\theta}_i
+\mathrm{WHEEL\_RADIUS} * \dot{\theta}_i
 }
 ```
 
@@ -867,7 +863,7 @@ and therefore
 \boxed{
 \dot{\theta}_i^{cmd}
 =
--\frac{v_{drive,i}^{cmd}}{\WHEEL_RADIUS}.
+-\frac{v_{drive,i}^{cmd}}{\mathrm{WHEEL\_RADIUS}}.
 }
 ```
 
@@ -879,13 +875,13 @@ It should not be confused with a motor controller or with the MPC plant input if
 
 ## 17. Parameters in the current code
 
-`ModelParams` currently contains:
+`ModelParams` contains the tunable model parameters. Fixed robot constants such as `WHEEL_RADIUS`, `WHEEL_CENTER_DISTANCE`, `ROLLER_COUNT`, and `GRAVITY` are module-level constants.
 
 | Parameter | Meaning | Current default |
 |---|---|---:|
 | mass | robot mass | supplied by caller |
 | inertia | planar yaw inertia | supplied by caller |
-| g | gravitational acceleration | 9.81 m/s² |
+| GRAVITY | gravitational acceleration | 9.81 m/s² |
 | mu_W_roller | roller longitudinal friction | 0.25 |
 | mu_T_roller | roller transverse friction | 0.15 |
 | mu_W_gap | rigid-gap longitudinal friction | 0.56 |
@@ -916,7 +912,7 @@ The four friction defaults are the values Williams measured for their carpet sur
 
 - four-wheel geometry
 - wheel mounting angles
-- wheel centre radius `r_dist`
+- fixed wheel-centre distance `WHEEL_CENTER_DISTANCE`
 - 16 rollers
 - measured roller diameter
 - measured gap dimensions
@@ -936,7 +932,7 @@ The current implementation is structurally consistent with the Williams model.
 
 In particular:
 
-- the +rho * wheel_speed term in v_W matches the sign convention used by this implementation and is consistent with Williams' wheel peripheral velocity construction;
+- the +WHEEL_RADIUS * wheel_speed term in v_W matches the sign convention used by this implementation and is consistent with Williams' wheel peripheral velocity construction;
 - the transverse slip contains no wheel-angular-velocity term;
 - friction uses the negative sign in the force equation, while the smooth mu(v) function preserves the sign of slip;
 - the three-wheel normal-load term mg/3 from the paper has been generalized to mg/N for the current four-wheel robot;

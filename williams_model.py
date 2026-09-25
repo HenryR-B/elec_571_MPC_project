@@ -23,7 +23,7 @@ The four wheel-angle states are ordered as:
     theta_3 = back-right
     theta_4 = back-left
 
-Each theta_i is the wheel rotation angle used to select the roller/gap
+Each theta[i] is the wheel rotation angle used to select the roller/gap
 friction sector.
 
 Input convention
@@ -39,19 +39,19 @@ with the same wheel ordering:
     3 = back-right
     4 = back-left
 
-Positive theta_dot_i follows the wheel axial direction a_hat_i. With the
-wheel-frame convention used here, the wheel peripheral speed is +rho*u_i in
-d_hat_i, matching Eq. (2)-(3) of Williams et al.
+Positive theta_dot[i] follows the wheel axial direction a_hat[i]. With the
+wheel-frame convention used here, the wheel peripheral speed is +rho*u[i] in
+d_hat[i], matching Eq. (2)-(3) of Williams et al.
 
 Williams' improved friction model
 ----------------------------------
 For each wheel:
 
-    v_contact_i = V_G + omega x p_i
-    v_W_i       = v_contact_i . d_hat_i + rho_i * u_i
-    v_T_i       = v_contact_i . a_hat_i
+    v_contact[i] = V_G + omega * p[i]
+    v_W[i]       = v_contact[i] * d_hat[i] + rho[i] * u[i]
+    v_T[i]       = v_contact[i] * a_hat[i]
 
-The friction coefficient is selected from the current wheel angle theta_i:
+The friction coefficient is selected from the current wheel angle theta[i]:
 
     roller sector -> (mu_W_roller, mu_T_roller)
     gap sector    -> (mu_W_gap,    mu_T_gap)
@@ -62,20 +62,20 @@ and
 
 The force exerted by the surface on the robot is
 
-    F_i = -(mg/N) * [mu_W(v_W_i) d_hat_i + mu_T(v_T_i) a_hat_i]
+    F[i] = -(mg/N) * [mu_W(v_W[i]) d_hat[i] + mu_T(v_T[i]) a_hat[i]]
 
 The body dynamics are
 
-    Vdot_G = (sum F_i) / m
-    omegadot = sum (p_i x F_i)_z / I
+    Vdot_G = (sum F[i]) / m
+    omegadot = sum (p[i] *F[i])_z / I
 
 and
 
-    thetadot_i = u_i.
+    thetadot[i] = u[i].
 
 This is deliberately a simple, explicit implementation of the published
 model. There is NO per-roller inertia, catch-up ODE, or rollerOmega array.
-The only roller-related state is the wheel angle theta_i that chooses the
+The only roller-related state is the wheel angle theta[i] that chooses the
 published roller/gap friction regime.
 
 Important project-specific parameters still require measurement
@@ -168,7 +168,7 @@ ROLLER_GAP_ANGLE_DEG = 2.0 * np.degrees(
 ROLLER_CONTACT_ANGLE_DEG = ROLLER_PITCH_DEG - ROLLER_GAP_ANGLE_DEG
 ROLLER_FRACTION = ROLLER_CONTACT_ANGLE_DEG / ROLLER_PITCH_DEG
 
-# Wheel numbering follows the README/state convention:
+# Wheel numbering:
 #   1 = front-left
 #   2 = front-right
 #   3 = back-right
@@ -201,7 +201,8 @@ def rotation_matrix(phi: float) -> np.ndarray:
     """2-D rotation matrix from body coordinates to inertial coordinates."""
     c = np.cos(phi)
     s = np.sin(phi)
-    return np.array([[c, -s], [s, c]], dtype=float)
+    return np.array([[c, -s], 
+                     [s, c]], dtype=float)
 
 
 def wheel_frames(wheels: Iterable[Wheel]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -211,8 +212,8 @@ def wheel_frames(wheels: Iterable[Wheel]) -> tuple[np.ndarray, np.ndarray, np.nd
     dist = np.array([w.r_dist for w in wheels], dtype=float)
 
     # Project convention:
-    #   d_hat = drive/traction direction (tangential)
-    #   a_hat = axial/perpendicular direction (radial)
+    #   d_hat = drive direction
+    #   a_hat = axial direction
     a_hat = np.stack([np.cos(alpha), np.sin(alpha)], axis=1)
     d_hat = np.stack([-np.sin(alpha), np.cos(alpha)], axis=1)
     p = np.stack([dist * np.cos(alpha), dist * np.sin(alpha)], axis=1)
@@ -243,8 +244,8 @@ def wheel_speeds_from_body_command(
     command is [vx_cmd, vy_cmd] or [vx_cmd, vy_cmd, omega_cmd].
 
     This is an inverse-kinematics initialization only. The returned wheel
-    speeds are intended to be held constant during an open-loop plant
-    simulation. The command is NOT reapplied as feedback at every timestep.
+    speeds are intended to be initialized and only held for as long as the simulator commands it. 
+    The command is NOT reapplied as feedback at every timestep.
 
     The sign is chosen so that, if the robot actually reaches the commanded
     body twist, v_W = 0 for every wheel.

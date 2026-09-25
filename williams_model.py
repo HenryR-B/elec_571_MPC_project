@@ -47,9 +47,13 @@ Williams' improved friction model
 ----------------------------------
 For each wheel:
 
-    v_contact[i] = V_G + omega * p[i]
-    v_W[i]       = v_contact[i] * d_hat[i] + rho[i] * u[i]
-    v_T[i]       = v_contact[i] * a_hat[i]
+    v_contact[i] = V_G + omega × p[i]
+    v_W[i]       = v_contact[i] · d_hat[i] + rho[i] · u[i]
+    v_T[i]       = v_contact[i] · a_hat[i]
+
+The dot products above are projections onto the wheel drive and axial
+directions, respectively. The cross product in v_contact gives the velocity
+from the robot's yaw rate.
 
 The friction coefficient is selected from the current wheel angle theta[i]:
 
@@ -58,16 +62,18 @@ The friction coefficient is selected from the current wheel angle theta[i]:
 
 and
 
-    mu(v) = mu_max * (2/pi) * atan(k*v)
+    mu(v) = mu_max · (2/pi) · atan(k · v)
 
 The force exerted by the surface on the robot is
 
-    F[i] = -(mg/N) * [mu_W(v_W[i]) d_hat[i] + mu_T(v_T[i]) a_hat[i]]
+    F[i] = -(mg/N) · [
+        mu_W(v_W[i]) · d_hat[i] + mu_T(v_T[i]) · a_hat[i]
+    ]
 
 The body dynamics are
 
     Vdot_G = (sum F[i]) / m
-    omegadot = sum (p[i] *F[i])_z / I
+    omegadot = sum (p[i] × F[i])_z / I
 
 and
 

@@ -15,17 +15,31 @@ The continuous state is
 
     X = [x, y, phi, Vx, Vy, omega, theta_1, ..., theta_N]
 
-where x, y, phi, Vx, Vy, omega are expressed in the inertial/world frame
-and theta_i is the wheel rotation angle used to select the roller/gap
+where x, y, phi, Vx, Vy, and omega are expressed in the inertial/world frame.
+
+The four wheel-angle states are ordered as:
+    theta_1 = front-left
+    theta_2 = front-right
+    theta_3 = back-right
+    theta_4 = back-left
+
+Each theta_i is the wheel rotation angle used to select the roller/gap
 friction sector.
 
 Input convention
 ----------------
-The control input is
+The control input is ordered as
 
-    u_i = theta_dot_i
+    u = [u_1, u_2, u_3, u_4]
+      = [theta_dot_1, theta_dot_2, theta_dot_3, theta_dot_4]
 
-where positive theta_dot_i follows the wheel axial direction a_hat_i. With the
+with the same wheel ordering:
+    1 = front-left
+    2 = front-right
+    3 = back-right
+    4 = back-left
+
+Positive theta_dot_i follows the wheel axial direction a_hat_i. With the
 wheel-frame convention used here, the wheel peripheral speed is +rho*u_i in
 d_hat_i, matching Eq. (2)-(3) of Williams et al.
 
@@ -33,7 +47,7 @@ Williams' improved friction model
 ----------------------------------
 For each wheel:
 
-    v_contact_i = V_G + omega x r_i
+    v_contact_i = V_G + omega x p_i
     v_W_i       = v_contact_i . d_hat_i + rho_i * u_i
     v_T_i       = v_contact_i . a_hat_i
 
@@ -53,7 +67,7 @@ The force exerted by the surface on the robot is
 The body dynamics are
 
     Vdot_G = (sum F_i) / m
-    omegadot = sum (r_i x F_i)_z / I
+    omegadot = sum (p_i x F_i)_z / I
 
 and
 
@@ -85,6 +99,7 @@ import numpy as np
 class Wheel:
     """One wheel in the robot body frame."""
 
+    number: int
     name: str
     alpha_deg: float
     r_dist: float
@@ -94,6 +109,8 @@ class Wheel:
     phase_offset: float = 0.0
 
     def __post_init__(self) -> None:
+        if self.number < 1:
+            raise ValueError("wheel number must be positive")
         if self.n_rollers < 1:
             raise ValueError("n_rollers must be positive")
         if not 0.0 < self.roller_fraction < 1.0:
@@ -151,11 +168,16 @@ ROLLER_GAP_ANGLE_DEG = 2.0 * np.degrees(
 ROLLER_CONTACT_ANGLE_DEG = ROLLER_PITCH_DEG - ROLLER_GAP_ANGLE_DEG
 ROLLER_FRACTION = ROLLER_CONTACT_ANGLE_DEG / ROLLER_PITCH_DEG
 
+# Wheel numbering follows the README/state convention:
+#   1 = front-left
+#   2 = front-right
+#   3 = back-right
+#   4 = back-left
 ROBOT_WHEELS = (
-    Wheel("front-left", 60.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
-    Wheel("front-right", -60.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
-    Wheel("back-left", 135.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
-    Wheel("back-right", -135.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
+    Wheel(1, "front-left", 60.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
+    Wheel(2, "front-right", -60.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
+    Wheel(3, "back-right", -135.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
+    Wheel(4, "back-left", 135.0, 0.076, WHEEL_CONTACT_RADIUS, ROLLER_COUNT, ROLLER_FRACTION),
 )
 
 # Williams' measured friction values for carpet (Table I). These are reference
@@ -285,8 +307,8 @@ def contact_kinematics(
     d_world = d_body @ R.T
     a_world = a_body @ R.T
 
-    omega_cross_r = np.stack((-omega * p_world[:, 1], omega * p_world[:, 0]), axis=1)
-    v_contact = V_world + omega_cross_r
+    omega_cross_p = np.stack((-omega * p_world[:, 1], omega * p_world[:, 0]), axis=1)
+    v_contact = V_world + omega_cross_p
 
     v_W = np.einsum("ij,ij->i", v_contact, d_world)
     rho = np.array([w.rho for w in wheels], dtype=float)
@@ -303,6 +325,8 @@ def wheel_forces(
 ) -> dict[str, np.ndarray]:
     """Evaluate Williams' improved friction model for all wheels."""
     wheels = tuple(wheels)
+    # State ordering is [x, y, phi, Vx, Vy, omega, theta_1, ..., theta_N]
+    # and ROBOT_WHEELS is ordered 1=FL, 2=FR, 3=BR, 4=BL.
     theta = np.asarray(state[6 : 6 + len(wheels)], dtype=float)
     if theta.shape != (len(wheels),):
         raise ValueError("state does not contain the expected wheel-angle states")

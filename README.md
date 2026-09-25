@@ -94,8 +94,6 @@ p_i
 \end{bmatrix}.
 ```
 
-These are body-frame vectors.
-
 The body-to-inertial rotation matrix used by the code is
 
 ```math
@@ -120,8 +118,6 @@ Therefore,
 ```math
 \hat{\mathbf d}_i=\mathbf R(\phi)\hat{\mathbf d}_{i,M}.
 ```
-
-This matches the frame transformation used by Williams.
 
 ---
 

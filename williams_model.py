@@ -30,8 +30,7 @@ Input convention
 ----------------
 The control input is ordered as
 
-    u = [u_1, u_2, u_3, u_4]
-      = [theta_dot_1, theta_dot_2, theta_dot_3, theta_dot_4]
+    wheel_angular_velocities = [theta_dot_1, theta_dot_2, theta_dot_3, theta_dot_4]
 
 with the same wheel ordering:
     1 = front-left
@@ -40,7 +39,7 @@ with the same wheel ordering:
     4 = back-left
 
 Positive theta_dot[i] follows the wheel axial direction a_hat[i]. With the
-wheel-frame convention used here, the wheel peripheral speed is +rho*u[i] in
+wheel-frame convention used here, the wheel peripheral speed is +rho[i] * wheel_angular_velocities[i] in
 d_hat[i], matching Eq. (2)-(3) of Williams et al.
 
 Williams' improved friction model
@@ -48,7 +47,7 @@ Williams' improved friction model
 For each wheel:
 
     v_contact[i] = V_G + omega × p[i]
-    v_W[i]       = v_contact[i] · d_hat[i] + rho[i] * u[i]
+    v_W[i]       = v_contact[i] · d_hat[i] + rho[i] * wheel_angular_velocities[i]
     v_T[i]       = v_contact[i] · a_hat[i]
 
 The dot products above are projections onto the wheel drive and axial
@@ -77,7 +76,7 @@ The body dynamics are
 
 and
 
-    thetadot[i] = u[i].
+    thetadot[i] = wheel_angular_velocities[i].
 
 This is deliberately a simple, explicit implementation of the published
 model. There is NO per-roller inertia, catch-up ODE, or rollerOmega array.
@@ -281,7 +280,7 @@ def wheel_speeds_from_body_command(
 
 def contact_kinematics(
     state: np.ndarray,
-    wheel_speeds: np.ndarray,
+    wheel_angular_velocities: np.ndarray,
     wheels: Iterable[Wheel],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return inertial contact velocities and the two Williams slip speeds.
@@ -298,9 +297,9 @@ def contact_kinematics(
         Wheel angular velocities, i.e. the input.
     """
     wheels = tuple(wheels)
-    wheel_speeds = np.asarray(wheel_speeds, dtype=float)
-    if wheel_speeds.shape != (len(wheels),):
-        raise ValueError("wheel_speeds must have shape (N_wheels,)")
+    wheel_angular_velocities = np.asarray(wheel_angular_velocities, dtype=float)
+    if wheel_angular_velocities.shape != (len(wheels),):
+        raise ValueError("wheel_angular_velocities must have shape (N_wheels,)")
     if state.shape[0] < 6 + len(wheels):
         raise ValueError("state is too short for the supplied wheel set")
 
@@ -319,14 +318,14 @@ def contact_kinematics(
 
     v_W = np.einsum("ij,ij->i", v_contact, d_world)
     rho = np.array([w.rho for w in wheels], dtype=float)
-    v_W = v_W + rho * wheel_speeds
+    v_W = v_W + rho * wheel_angular_velocities
     v_T = np.einsum("ij,ij->i", v_contact, a_world)
-    return v_contact, v_W, v_T, wheel_speeds
+    return v_contact, v_W, v_T, wheel_angular_velocities
 
 
 def wheel_forces(
     state: np.ndarray,
-    wheel_speeds: np.ndarray,
+    wheel_angular_velocities: np.ndarray,
     params: ModelParams,
     wheels: Iterable[Wheel] = ROBOT_WHEELS,
 ) -> dict[str, np.ndarray]:
@@ -338,7 +337,7 @@ def wheel_forces(
     if theta.shape != (len(wheels),):
         raise ValueError("state does not contain the expected wheel-angle states")
 
-    v_contact, v_W, v_T, theta_dot = contact_kinematics(state, wheel_speeds, wheels)
+    v_contact, v_W, v_T, theta_dot = contact_kinematics(state, wheel_angular_velocities, wheels)
 
     p_body, d_body, a_body = wheel_frames(wheels)
     R = rotation_matrix(float(state[2]))
@@ -389,7 +388,7 @@ def body_wrench(force_data: dict[str, np.ndarray]) -> tuple[np.ndarray, float]:
 
 def continuous_dynamics(
     state: np.ndarray,
-    wheel_speeds: np.ndarray,
+    wheel_angular_velocities: np.ndarray,
     params: ModelParams,
     wheels: Iterable[Wheel] = ROBOT_WHEELS,
 ) -> np.ndarray:
@@ -399,7 +398,7 @@ def continuous_dynamics(
     if state.shape != (expected,):
         raise ValueError(f"state must have shape ({expected},)")
 
-    force_data = wheel_forces(state, wheel_speeds, params, wheels)
+    force_data = wheel_forces(state, wheel_angular_velocities, params, wheels)
     F_world, tau_z = body_wrench(force_data)
 
     x_dot = np.empty_like(state, dtype=float)
@@ -408,13 +407,13 @@ def continuous_dynamics(
     x_dot[2] = state[5]
     x_dot[3:5] = F_world / params.mass
     x_dot[5] = tau_z / params.inertia
-    x_dot[6:] = np.asarray(wheel_speeds, dtype=float)
+    x_dot[6:] = np.asarray(wheel_angular_velocities, dtype=float)
     return x_dot
 
 
 def rk4_step(
     state: np.ndarray,
-    wheel_speeds: np.ndarray,
+    wheel_angular_velocities: np.ndarray,
     dt: float,
     params: ModelParams,
     wheels: Iterable[Wheel] = ROBOT_WHEELS,
@@ -422,7 +421,7 @@ def rk4_step(
     """One fixed-input fourth-order Runge-Kutta integration step."""
     if dt <= 0.0:
         raise ValueError("dt must be positive")
-    f = lambda x: continuous_dynamics(x, wheel_speeds, params, wheels)
+    f = lambda x: continuous_dynamics(x, wheel_angular_velocities, params, wheels)
     k1 = f(state)
     k2 = f(state + 0.5 * dt * k1)
     k3 = f(state + 0.5 * dt * k2)
@@ -432,7 +431,7 @@ def rk4_step(
 
 def simulate(
     x0: np.ndarray,
-    wheel_speed_fn: Callable[[float], np.ndarray],
+    wheel_angular_velocity_fn: Callable[[float], np.ndarray],
     duration: float,
     dt: float,
     params: ModelParams,
@@ -449,10 +448,10 @@ def simulate(
     x[0] = np.asarray(x0, dtype=float)
 
     for k in range(n_steps - 1):
-        u = np.asarray(wheel_speed_fn(t[k]), dtype=float)
-        if u.shape != (len(wheels),):
-            raise ValueError("wheel_speed_fn must return one speed per wheel")
-        x[k + 1] = rk4_step(x[k], u, dt, params, wheels)
+        wheel_angular_velocities = np.asarray(wheel_angular_velocity_fn(t[k]), dtype=float)
+        if wheel_angular_velocities.shape != (len(wheels),):
+            raise ValueError("wheel_angular_velocity_fn must return one speed per wheel")
+        x[k + 1] = rk4_step(x[k], wheel_angular_velocities, dt, params, wheels)
 
     return t, x
 
@@ -484,7 +483,7 @@ def simulate_command(
         Simulation times.
     x : (K, state_dim)
         Plant state history.
-    wheel_speed_history : (K-1, N)
+    wheel_angular_velocity_history : (K-1, N)
         Wheel angular velocities applied during each integration step.
     """
     if duration <= 0.0 or dt <= 0.0:
@@ -495,15 +494,15 @@ def simulate_command(
     t = np.arange(n_steps, dtype=float) * dt
     x = np.empty((n_steps, len(x0)), dtype=float)
     x[0] = np.asarray(x0, dtype=float)
-    wheel_speed_history = np.empty((n_steps - 1, len(wheels)), dtype=float)
+    wheel_angular_velocity_history = np.empty((n_steps - 1, len(wheels)), dtype=float)
 
     for k in range(n_steps - 1):
         command = np.asarray(command_fn(t[k]), dtype=float)
-        wheel_speeds = wheel_speeds_from_body_command(command, wheels)
-        wheel_speed_history[k] = wheel_speeds
-        x[k + 1] = rk4_step(x[k], wheel_speeds, dt, params, wheels)
+        wheel_angular_velocities = wheel_speeds_from_body_command(command, wheels)
+        wheel_angular_velocity_history[k] = wheel_angular_velocities
+        x[k + 1] = rk4_step(x[k], wheel_angular_velocities, dt, params, wheels)
 
-    return t, x, wheel_speed_history
+    return t, x, wheel_angular_velocity_history
 
 def make_rest_state(wheels: Iterable[Wheel] = ROBOT_WHEELS) -> np.ndarray:
     """Convenience constructor for a zero state with one angle per wheel."""

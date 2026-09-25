@@ -37,7 +37,7 @@ Where:
 The plant input is
 
 ```math
-u_i=\dot{\theta}_i
+\dot{\theta}_i
 ```
 
 for each wheel.
@@ -217,13 +217,13 @@ The peripheral contact velocity is
 Because $\hat{\mathbf a}_i$ and $\hat{\mathbf d}_i$ are perpendicular, the magnitude of the peripheral velocity is
 
 ```math
-\rho_i\dot{\theta}_i.
+\WHEEL_RADIUS\dot{\theta}_i.
 ```
 
 The current code uses the equivalent scalar projection directly in the longitudinal slip equation:
 
 ```math
-+\rho_i\dot{\theta}_i.
++\WHEEL_RADIUS\dot{\theta}_i.
 ```
 
 The sign is a convention determined by the chosen positive theta_i direction and d_hat_i. The current code uses that convention consistently in both inverse kinematics and the plant model.
@@ -242,14 +242,14 @@ v_{W,i}
 =
 \mathbf v_{c,i}\cdot\hat{\mathbf d}_i
 +
-\rho_i * u_i
+\WHEEL_RADIUS * \dot{\theta}_i
 }
 ```
 
 with
 
 ```math
-u_i=\dot{\theta}_i.
+\dot{\theta}_i=\dot{\theta}_i.
 ```
 
 This is the equation implemented in contact_kinematics().
@@ -259,11 +259,11 @@ This is the equation implemented in contact_kinematics().
 The code's inverse-kinematics helper chooses
 
 ```math
-u_i
+\dot{\theta}_i
 =
 -\frac{
 \mathbf v_{c,i}^{cmd}\cdot\hat{\mathbf d}_i
-}{\rho_i}
+}{\WHEEL_RADIUS}
 ```
 
 so that the commanded ideal motion satisfies
@@ -288,7 +288,7 @@ v_{T,i}
 }
 ```
 
-There is no wheel-speed term in this equation.
+There is no wheel-angular-velocity term in this equation.
 
 The current Python implementation matches this directly.
 
@@ -574,7 +574,7 @@ F_i
 \right].
 ```
 
-This is a direct generalization of Williams' three-wheel equation to N=4 wheels.
+This is a direct generalization of Williams' three-wheel equation to WHEEL_COUNT=4 wheels.
 
 The equal-load assumption is a modelling assumption. It ignores dynamic load transfer and unequal static loading.
 
@@ -696,7 +696,7 @@ The wheel-angle states evolve according to
 
 ```math
 \boxed{
-\dot\theta_i=u_i.
+\dot\theta_i=\dot{\theta}_i.
 }
 ```
 
@@ -723,7 +723,7 @@ p_{i,x}F_{i,y}
 -
 p_{i,y}F_{i,x}
 \right)\\
-\dot\theta_i &= u_i
+\dot\theta_i &= \dot{\theta}_i
 \end{aligned}
 }
 ```
@@ -741,7 +741,7 @@ v_{W,i}
 \cdot
 \hat{\mathbf d}_i
 +
-\rho_i * u_i
+\WHEEL_RADIUS * \dot{\theta}_i
 }
 ```
 
@@ -829,7 +829,7 @@ The roller/gap regime changes when the wheel angle crosses the sector boundary, 
 
 ## 16. Helper: body command to wheel speed
 
-`wheel_speeds_from_body_command()` is a project helper, not an equation from Williams.
+`wheel_angular_velocities_from_body_command()` is a project helper, not an equation from Williams.
 
 Given a desired body twist
 
@@ -841,7 +841,7 @@ V_y^{cmd}\\
 \end{bmatrix},
 ```
 
-the helper calculates the wheel contact velocity that would occur if that twist were achieved and chooses wheel speeds such that
+the helper calculates the wheel contact velocity that would occur if that twist were achieved and chooses wheel angular velocities such that
 
 ```math
 v_{W,i}=0.
@@ -865,9 +865,9 @@ and therefore
 
 ```math
 \boxed{
-u_i^{cmd}
+\dot{\theta}_i^{cmd}
 =
--\frac{v_{drive,i}^{cmd}}{\rho_i}.
+-\frac{v_{drive,i}^{cmd}}{\WHEEL_RADIUS}.
 }
 ```
 
@@ -937,7 +937,7 @@ The current implementation is structurally consistent with the Williams model.
 In particular:
 
 - the +rho * wheel_speed term in v_W matches the sign convention used by this implementation and is consistent with Williams' wheel peripheral velocity construction;
-- the transverse slip contains no wheel-speed term;
+- the transverse slip contains no wheel-angular-velocity term;
 - friction uses the negative sign in the force equation, while the smooth mu(v) function preserves the sign of slip;
 - the three-wheel normal-load term mg/3 from the paper has been generalized to mg/N for the current four-wheel robot;
 - the wheel-angle-dependent friction regime is implemented as a periodic roller/gap sector;

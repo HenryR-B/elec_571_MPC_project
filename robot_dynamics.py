@@ -15,19 +15,6 @@ Dynamic equations (project notes, step 6):
 These are calculated in the WORLD frame here. The wheel forces from
 williams_model.py are calculated in the BODY frame and must be rotated into
 the WORLD frame before applying the force equations below.
-
-The state used by the integrator is:
-    state = [x, y, phi, xdot, ydot, phidot]
-
-where x, y, xdot, ydot are WORLD-frame quantities and phi, phidot describe
-the robot orientation and angular velocity.
-
-The translational velocity is converted from WORLD frame to BODY frame before
-being passed to williams_model.py.
-
-The nonlinear dynamics are of the form: X_dot = f(X, U), solved directly
-below (not an implicit/iterative solve -- the mass matrix here is diagonal,
-so this is three independent sums divided by M, M, I_zz respectively).
 """
 
 from __future__ import annotations
@@ -80,18 +67,6 @@ def body2world_accelerations(F, r_positions, phi):
     phi_ddot = tau_sum / I_ZZ
     return x_ddot, y_ddot, phi_ddot
 
-
-def state_derivative(state, F, r_positions):
-    """Full state derivative for the integrator.
-
-    state = [x, y, phi, xdot, ydot, phidot]  in world frame
-
-    Returns state_dot, same shape as state.
-    """
-    x, y, phi, xdot, ydot, phidot = state
-    x_ddot, y_ddot, phi_ddot = body2world_accelerations(F, r_positions, phi)
-
-    return np.array([xdot, ydot, phidot, x_ddot, y_ddot, phi_ddot])
 
 # ---------------------------------------------------------------------------
 # Self-tests

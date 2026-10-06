@@ -1,0 +1,12 @@
+*.pyc
+*.pyc
+*.pyc
+/__pycache__
+/__pycache__
+*.pyc
+__pycache__/williams_model.cpython-314.pyc
+__pycache__/robot_dynamics.cpython-314.pyc
+__pycache__/integrator.cpython-314.pyc
+__pycache__/controller_pid.cpython-314.pyc
+__pycache__/actuator_model.cpython-314.pyc
+__pycache__/actuator.cpython-314.pyc

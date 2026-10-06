@@ -17,9 +17,10 @@ import numpy as np
 # Tinymovr velocity-controller values from The Bots' Rustware
 # ---------------------------------------------------------------------------
 
-VEL_P_GAIN = 0.0003
-VEL_I_GAIN = 0.025
-IQ_LIMIT = 20.0  # [A]
+VEL_P_GAIN = 0.020#0.0003
+VEL_I_GAIN = 0.04#0.025
+
+IQ_LIMIT = 20.0/4  # [A]
 
 WHEEL_INERTIA = 16.576 * 1e-6       # kg*m^2
 WHEEL_MASS = 0.066621               # kg (including rotor, all rotating mass)
@@ -48,4 +49,5 @@ def actuator_derivatives(theta_dot_cmd, theta_dot, integral_error, load_torque):
 
     theta_ddot = (motor_torque - load_torque) / WHEEL_INERTIA
 
-    return integral_state_dot, theta_ddot
+    return integral_state_dot, theta_ddot, iq
+

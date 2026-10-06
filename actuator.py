@@ -18,7 +18,7 @@ from __future__ import annotations
 # Actuator response
 # ---------------------------------------------------------------------------
 
-ACTUATOR_TIME_CONSTANT = 1  # [s] assumed actuator response time
+ACTUATOR_TIME_CONSTANT = 0.05  # [s] assumed actuator response time
 
 
 def actuator_derivatives(theta_dot_cmd, theta_dot):

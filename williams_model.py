@@ -123,7 +123,7 @@ def wheel_center_velocity(V, omega, wheel_num):
     return V_center, d_hat, a_hat
 
 
-def wheel_anglular_velocity(V_center, d_hat):
+def wheel_angular_velocity(V_center, d_hat):
     """Calculate the wheel angular velocity for zero d-axis slip.
 
     This is the inverse-kinematic wheel velocity.
@@ -183,14 +183,24 @@ def slip_velocities(V, omega, theta_dot, wheel_num):
 # ---------------------------------------------------------------------------
 
 # ASSUMED -- run tilt-test measurement first, but assumed values are okay
-MU_D_MAX = 0.6   # TBD: measure via tilt test (wheels aligned, common direction)
-MU_A_MAX = 0.10   # TBD: measure via tilt test (wheels perpendicular)
-K_SMOOTH = 1000.0  # Williams' own choice, for numerical stability
+MU_D_MAX = 0.8   # TBD: measure via tilt test (wheels aligned, common direction)
+MU_DYN = 0.3 # dynamic friction coefficient, assumed based on lower than the calculated slip at 2.5m/s => 0.422
+ALPHA_D = 1 # measure of how fast static friction decays to dynamic in the drive direction (no measure of this in the axial direction)
+"""
+F_sum_coeff = abs( d_hat[ y axis ] ) = abs( sin(30) ) + abs( sin(150) ) + abs( sin(-150) ) + abs( sin(-30) )
+Fd = ROBOT_MASS * 2.5 / F_sum_coeff
+FN = ROBOT_MASS*GRAVITY/N_WHEELS 
+MU_DYN_CORNER = Fd / FN = 0.422
+"""
+
+ASSUMED_MU_DYN_STAT_CORNER = 0.422 # 2.5m/s^2 limit where wheels start to slip in +y
+MU_A_MAX = 0.1   # TBD: measure via tilt test (wheels perpendicular)
+K_SMOOTH = 150.0  # Williams' own choice, for numerical stability
 
 
 def mu_d(v_slip_d, mu_d_max=MU_D_MAX, k=K_SMOOTH):
     """mu_d(v_slip_d) = mu_d_max * (2/pi) * atan(k * v_slip_d)."""
-    return mu_d_max * (2.0 / np.pi) * np.arctan(k * v_slip_d)
+    return (2.0 / np.pi) * np.arctan(k * v_slip_d) * (MU_DYN + (MU_D_MAX - MU_DYN)*np.exp(-ALPHA_D * np.abs(v_slip_d)))
 
 
 def mu_a(v_slip_a, mu_a_max=MU_A_MAX, k=K_SMOOTH):
@@ -203,10 +213,12 @@ def wheel_force(V, omega, theta_dot, wheel_num):
     d_hat, a_hat = wheel_frame(WHEEL_ALPHA_DEG[wheel_num])
 
     v_slip_d, v_slip_a = slip_velocities(V, omega, theta_dot, wheel_num)
+    F_N = (ROBOT_MASS * GRAVITY / N_WHEELS)
+    F_d = - F_N * mu_d(v_slip_d)
+    F_a = - F_N * mu_a(v_slip_a)
+    F_i = F_d * d_hat +  F_a * a_hat
 
-    F_i = -(ROBOT_MASS * GRAVITY / N_WHEELS) * (mu_d(v_slip_d) * d_hat + mu_a(v_slip_a) * a_hat)
-
-    return F_i, v_slip_d, v_slip_a
+    return F_i, F_d, v_slip_d, v_slip_a
 
 
 def all_wheel_forces(V, omega, theta_dots):
@@ -217,11 +229,12 @@ def all_wheel_forces(V, omega, theta_dots):
     F = np.zeros((N_WHEELS, 2))
     v_slip_d = np.zeros(N_WHEELS)
     v_slip_a = np.zeros(N_WHEELS)
+    F_d = np.zeros(N_WHEELS)
 
     for i in range(N_WHEELS):
-        F[i], v_slip_d[i], v_slip_a[i] = wheel_force(V, omega, theta_dots[i], i)
+        F[i], F_d[i], v_slip_d[i], v_slip_a[i] = wheel_force(V, omega, theta_dots[i], i)
 
-    return F, v_slip_d, v_slip_a
+    return F, F_d, v_slip_d, v_slip_a
 
 
 # ---------------------------------------------------------------------------

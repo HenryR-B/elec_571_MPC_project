@@ -21,12 +21,12 @@ import numpy as np
 
 
 def controller_pid(velocity_target, velocity, integral_error, previous_velocity, dt, kp, ki, kd):
-    error = velocity_target - velocity
+    proportional_error = velocity_target - velocity
 
-    integral_error_dot = error
+    integral_error_dot = proportional_error
 
     derivative_error = -(velocity - previous_velocity) / dt
 
-    velocity_cmd = kp * error + ki * integral_error + kd * derivative_error
+    velocity_cmd = velocity_target + kp * proportional_error + ki * integral_error + kd * derivative_error
 
     return velocity_cmd, integral_error_dot

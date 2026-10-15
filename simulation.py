@@ -32,7 +32,7 @@ from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 
-from actuator_model_motor import actuator_model, reset as reset_actuator
+from actuator_model import actuator_model, reset as reset_actuator
 from controller_pid import controller_pid
 from integrator import rk4_step
 from robot_dynamics import body2world_accelerations
@@ -49,7 +49,7 @@ from robot_constants import WHEEL_RADIUS, MOTOR_KT
 # Simulation parameters
 # ---------------------------------------------------------------------------
 
-DT = 0.00001
+DT = 0.0001
 SIMULATION_TIME = 1.0
 
 KP = np.array([10, 10, 10])
@@ -61,7 +61,7 @@ target = [1, 0, 0]
 MAX_ACCELERATION = 2.5  # m/s^2
 
 def run_motor_test():
-    reset_actuator()
+    #reset_actuator()
 
     velocity = np.array([0.0, 5.0, 0.0])
     theta_dot = np.zeros(4)
@@ -219,12 +219,12 @@ def run_simulation(velocity_target):
         velocity_body = np.dot(rotation, np.array([vx, vy]))
 
         # motor torque is one timestep delayed because it is an effect not a cause.
-        F_required = required_static_friction(velocity_body, omega, motor_torque)
+        F_required = F_required = np.full(4, 100.0) #required_static_friction(velocity_body, omega, motor_torque)
         F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
 
         load_torque = wheel_load_torques(F_d)
 
-        theta_dot, theta_ddot, iq, iq_dot = actuator_model(theta_dot_cmd, theta_dot, load_torque, DT) #theta_dot = actuator_model(theta_dot_cmd, theta_dot, load_torque, ACTUATOR_DT)
+        theta_dot, theta_ddot, iq = actuator_model(theta_dot_cmd, theta_dot, load_torque, DT)
 
         motor_torque = iq * MOTOR_KT
 

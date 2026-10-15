@@ -1,29 +1,39 @@
+
 """
 actuator.py
-===========
+=================
 
-Velocity actuator model for one wheel.
+Velocity actuator model for a wheel motor.
 
-The complete wheel velocity-control system is modeled as a first-order
-velocity response from commanded wheel speed to actual wheel speed.
-
-This is an actuator-level approximation. It does not assume a particular
-motor inertia, electrical model, gear efficiency, or motor torque model.
+The velocity PI controller generates a current command, which is
+limited by IQ_LIMIT. Motor torque is calculated directly from current.
+Electrical motor dynamics are not modeled.
 """
 
 from __future__ import annotations
 
+import numpy as np
 
-# ---------------------------------------------------------------------------
-# Actuator response
-# ---------------------------------------------------------------------------
-
-ACTUATOR_TIME_CONSTANT = 0.05  # [s] assumed actuator response time
+from robot_constants import VEL_P_GAIN, VEL_I_GAIN
+from robot_constants import IQ_LIMIT, MOTOR_KT, WHEEL_INERTIA
 
 
-def actuator_derivatives(theta_dot_cmd, theta_dot):
-    """Return wheel angular acceleration."""
+def current_command(velocity_error, integral_state):
+    iq = VEL_P_GAIN * velocity_error + VEL_I_GAIN * integral_state
 
-    theta_ddot = (theta_dot_cmd - theta_dot) / ACTUATOR_TIME_CONSTANT
+    return np.clip(iq, -IQ_LIMIT, IQ_LIMIT)
 
-    return theta_ddot
+
+def actuator_derivatives(theta_dot_cmd, theta_dot, integral_state, load_torque):
+
+    velocity_error = theta_dot_cmd - theta_dot
+
+    iq = current_command(velocity_error, integral_state)
+
+    integral_state_dot = velocity_error
+
+    motor_torque = MOTOR_KT * iq
+    
+    theta_ddot = (motor_torque - load_torque) / WHEEL_INERTIA
+
+    return integral_state_dot, theta_ddot, iq

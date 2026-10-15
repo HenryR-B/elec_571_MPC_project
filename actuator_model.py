@@ -4,22 +4,22 @@ actuator_model.py
 
 Four-wheel velocity actuator model.
 
-This file wraps the individual actuator function from actuator.py and
-applies it to all four wheels.
-
 State:
-
     theta_dot[4]       actual wheel angular velocities [rad/s]
+    integral_state[4]  velocity PI integral states
 
-Input:
-
+Inputs:
     theta_dot_cmd[4]   commanded wheel angular velocities [rad/s]
+    load_torque[4]     wheel load torques [N m]
+    dt                 timestep [s]
 
-Output:
+Outputs:
+    theta_dot_new[4]   updated wheel angular velocities [rad/s]
+    theta_ddot[4]      wheel angular accelerations [rad/s^2]
+    iq[4]              commanded motor currents [A]
 
-    theta_dot[4]       updated wheel angular velocities [rad/s]
-
-The actuator model internally integrates the wheel dynamics using RK4.
+Wheel dynamics are integrated using RK4. Current responds
+instantaneously to the controller command.
 """
 
 from __future__ import annotations
@@ -29,32 +29,36 @@ import numpy as np
 from actuator import actuator_derivatives
 
 
-# ---------------------------------------------------------------------------
-# Four-wheel actuator model
-# ---------------------------------------------------------------------------
-def derivatives(theta_dot_cmd, theta_dot_stage):
+integral_state = np.zeros(4)
+
+
+def reset():
+    global integral_state
+    integral_state = np.zeros(4)
+
+
+def derivatives(theta_dot_cmd, theta_dot_stage, integral_stage, load_torque):
+    integral_dot = np.zeros(4)
     theta_ddot = np.zeros(4)
+    iq = np.zeros(4)
 
     for i in range(4):
-        theta_ddot[i] = actuator_derivatives(
-            theta_dot_cmd[i],
-            theta_dot_stage[i]
-        )
+        integral_dot[i], theta_ddot[i], iq[i] = actuator_derivatives(theta_dot_cmd[i], theta_dot_stage[i], integral_stage[i], load_torque[i])
 
-    return theta_ddot
+    return integral_dot, theta_ddot, iq
 
-def actuator_model(theta_dot_cmd, theta_dot, dt):
-    """Advance all four actuators by one timestep using RK4."""
 
-    k1 = derivatives(theta_dot_cmd, theta_dot)
-    k2 = derivatives(theta_dot_cmd, theta_dot + 0.5 * dt * k1)
-    k3 = derivatives(theta_dot_cmd, theta_dot + 0.5 * dt * k2)
-    k4 = derivatives(theta_dot_cmd, theta_dot + dt * k3)
+def actuator_model(theta_dot_cmd, theta_dot, load_torque, dt):
+    global integral_state
 
-    theta_dot_new = theta_dot + (dt / 6.0) * (
-        k1 + 2.0 * k2 + 2.0 * k3 + k4
-    )
+    k1_i, k1_w, _ = derivatives(theta_dot_cmd, theta_dot, integral_state, load_torque)
+    k2_i, k2_w, _ = derivatives(theta_dot_cmd, theta_dot + 0.5 * dt * k1_w, integral_state + 0.5 * dt * k1_i, load_torque)
+    k3_i, k3_w, _ = derivatives(theta_dot_cmd, theta_dot + 0.5 * dt * k2_w, integral_state + 0.5 * dt * k2_i, load_torque)
+    k4_i, k4_w, _ = derivatives(theta_dot_cmd, theta_dot + dt * k3_w, integral_state + dt * k3_i, load_torque)
 
-    theta_ddot = derivatives(theta_dot_cmd, theta_dot_new)
+    theta_dot_new = theta_dot + (dt / 6.0) * (k1_w + 2.0 * k2_w + 2.0 * k3_w + k4_w)
+    integral_state += (dt / 6.0) * (k1_i + 2.0 * k2_i + 2.0 * k3_i + k4_i)
 
-    return theta_dot_new, theta_ddot
+    _, theta_ddot, iq = derivatives(theta_dot_cmd, theta_dot_new, integral_state, load_torque)
+
+    return theta_dot_new, theta_ddot, iq

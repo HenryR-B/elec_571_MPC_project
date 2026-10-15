@@ -19,31 +19,13 @@ the WORLD frame before applying the force equations below.
 
 from __future__ import annotations
 
+from robot_constants import WHEEL_ALPHA_DEG, WHEEL_ROBOT_DIST
+from robot_constants import ROBOT_MASS, ROBOT_INERTIA
+
 import numpy as np
 
-ROBOT_MASS = 2.698   # kg
-
-# ---------------------------------------------------------------------------
-# I_zz via parallel axis theorem, from CAD mass properties.
-#
-# CAD reports (about the centre of gravity):
-#   I_zz(CoG) = 7443.681kg*mm^2
-#   CoG = (x=0.597, y=10.206, z=61.146) mm, relative to the CAD origin.
-#
-# I_zz = I_zz(CoG) + M * (x_cog^2 + y_cog^2)     -- parallel axis theorem,
-# shifting from the CoG to whatever point is used as the robot's rotation
-# origin.
-# ---------------------------------------------------------------------------
-
-IZZ_COG_KG_MM2 = 7443.681          # kg*mm^2
-COG_X_MM, COG_Y_MM = 0.597, 10.206 #mm
-
-I_ZZ = (IZZ_COG_KG_MM2 + ROBOT_MASS * (COG_X_MM**2 + COG_Y_MM**2))*1e-6 # 7725.673 kg mm^2 = 0.007725673 kgm^2
-# constant robot inertia cause the robot does not change shape
-
-def body2world_accelerations(F, r_positions, phi):
+def body2world_accelerations(F, phi):
     """F: (n_wheels, 2) wheel force vectors, body frame.
-    r_positions: (n_wheels, 2) wheel position vectors r_i, body frame.
 
     Returns (x_ddot, y_ddot, phi_ddot) in the world frame.
     """
@@ -52,19 +34,24 @@ def body2world_accelerations(F, r_positions, phi):
         [np.sin(phi),  np.cos(phi)]
     ])
 
+    r_positions = np.column_stack((
+        np.cos(np.radians(WHEEL_ALPHA_DEG)) * WHEEL_ROBOT_DIST,
+        np.sin(np.radians(WHEEL_ALPHA_DEG)) * WHEEL_ROBOT_DIST
+    ))
+
     F_world = np.dot(F, rotation.T)
     r_world = np.dot(r_positions, rotation.T)
 
     
     # z_hat . (r_i x F_i) for 2D vectors: r_i,x * F_i,y - r_i,y * F_i,x
-    tau_sum = np.cross(r_world, F_world).sum()
+    torque_sum = np.cross(r_world, F_world).sum()
 
     Fx_sum = F_world[:, 0].sum()
     Fy_sum = F_world[:, 1].sum()
 
     x_ddot = Fx_sum / ROBOT_MASS
     y_ddot = Fy_sum / ROBOT_MASS
-    phi_ddot = tau_sum / I_ZZ
+    phi_ddot = torque_sum / ROBOT_INERTIA
     return x_ddot, y_ddot, phi_ddot
 
 
@@ -76,13 +63,13 @@ def _test_izz_positive_and_reasonable():
     """Check that the calculated robot inertia is positive and reasonable."""
     disk_estimate = 0.5 * ROBOT_MASS * 0.088**2
 
-    assert I_ZZ > 0.0, f"I_ZZ must be positive, got {I_ZZ}"
-    assert 0.1 * disk_estimate < I_ZZ < 10.0 * disk_estimate, (
-        f"I_ZZ = {I_ZZ:.6f} kg*m^2 is outside the expected range "
+    assert ROBOT_INERTIA > 0.0, f"I_ZZ must be positive, got {ROBOT_INERTIA}"
+    assert 0.1 * disk_estimate < ROBOT_INERTIA < 10.0 * disk_estimate, (
+        f"I_ZZ = {ROBOT_INERTIA:.6f} kg*m^2 is outside the expected range "
         f"relative to the disk estimate of {disk_estimate:.6f} kg*m^2"
     )
 
-    print(f"  PASS: I_ZZ = {I_ZZ:.6f} kg*m^2")
+    print(f"  PASS: I_ZZ = {ROBOT_INERTIA:.6f} kg*m^2")
 
 
 def _test_symmetric_forces_cancel():
@@ -164,7 +151,7 @@ def _test_pure_torque():
     x_ddot, y_ddot, phi_ddot = body2world_accelerations(F, r_positions, phi)
 
     expected_tau = 0.05 + 0.05
-    expected_phi_ddot = expected_tau / I_ZZ
+    expected_phi_ddot = expected_tau / ROBOT_INERTIA
 
     assert abs(x_ddot) < 1e-12, f"expected zero x acceleration, got {x_ddot}"
     assert abs(y_ddot) < 1e-12, f"expected zero y acceleration, got {y_ddot}"
@@ -215,7 +202,7 @@ def _test_body_to_world_torque_rotation():
 
     x_ddot, y_ddot, phi_ddot = body2world_accelerations(F, r_positions, phi)
 
-    expected_phi_ddot = 1.0 / I_ZZ
+    expected_phi_ddot = 1.0 / ROBOT_INERTIA
 
     assert np.isclose(phi_ddot, expected_phi_ddot)
     

@@ -37,34 +37,26 @@ from controller_pid import controller_pid
 from integrator import rk4_step
 from robot_dynamics import body2world_accelerations
 from williams_model import (
-    WHEEL_ALPHA_DEG,
-    WHEEL_ROBOT_DIST,
-    WHEEL_RADIUS,
-    ROBOT_MASS,
-    N_WHEELS,
-    GRAVITY,
     all_wheel_forces,
-    wheel_frame,
     wheel_center_velocity,
     wheel_angular_velocity,
+    required_static_friction, mu_d, mu_a
 )
 
-from actuator_motor import MOTOR_KT
-
+from robot_constants import WHEEL_RADIUS, MOTOR_KT
 
 # ---------------------------------------------------------------------------
 # Simulation parameters
 # ---------------------------------------------------------------------------
 
-DT = 0.001
-ACTUATOR_DT = 0.0001
+DT = 0.00001
 SIMULATION_TIME = 1.0
 
-KP = np.array([10, 10, 150])
-KI = np.array([3, 2, 500])
-KD = np.array([0.5, 0.5, 0.3])
+KP = np.array([10, 10, 10])
+KI = np.array([5, 5, 10])
+KD = np.array([0.1, 0.1, 0.2])
 
-target = [0.5, 0, 0]
+target = [1, 0, 0]
 
 MAX_ACCELERATION = 2.5  # m/s^2
 
@@ -82,16 +74,14 @@ def run_motor_test():
     for i in range(4):
         print(f"  Wheel {i + 1}: {theta_dot_cmd[i]:.3f}")
 
-    time = np.arange(0.0, 1, ACTUATOR_DT)
+    time = np.arange(0.0, 1, DT)
 
     theta_dot_history = np.zeros((len(time), 4))
     theta_ddot_history = np.zeros((len(time), 4))
     iq_history = np.zeros((len(time), 4))
 
     for k, t in enumerate(time):
-        theta_dot, theta_ddot, iq = actuator_model(
-            theta_dot_cmd, theta_dot, load_torque, ACTUATOR_DT
-        )
+        theta_dot, theta_ddot, iq = actuator_model(theta_dot_cmd, theta_dot, load_torque, DT)
 
         theta_dot_history[k] = theta_dot
         theta_ddot_history[k] = theta_ddot
@@ -141,14 +131,13 @@ def inverse_kinematics(velocity, phi):
 # Wheel load torque
 # ---------------------------------------------------------------------------
 
-def wheel_load_torques(F):
+def wheel_load_torques(Fd):
     """Calculate wheel load torque from the Williams wheel forces."""
 
     load_torque = np.zeros(4)
 
     for i in range(4):
-        d_hat, a_hat = wheel_frame(WHEEL_ALPHA_DEG[i])
-        load_torque[i] = -WHEEL_RADIUS * np.dot(F[i], d_hat)
+        load_torque[i] = WHEEL_RADIUS * Fd[i] # actuator defines the negative sign
 
     return load_torque
 
@@ -157,26 +146,12 @@ def wheel_load_torques(F):
 # Robot state derivative
 # ---------------------------------------------------------------------------
 
-def robot_state_derivative(state, theta_dot):
+def robot_state_derivative(state, F):
     """Return the derivative of the robot physical state."""
 
     x, y, phi, vx, vy, omega = state
 
-    rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
-    velocity_body = np.dot(rotation, np.array([vx, vy]))
-    velocity = np.array([velocity_body[0], velocity_body[1], omega])
-
-    F, _, v_slip_d, v_slip_a = all_wheel_forces(velocity[:2], omega, theta_dot)
-
-    x_ddot, y_ddot, phi_ddot = body2world_accelerations(
-        F,
-        np.array([
-            [np.cos(np.radians(WHEEL_ALPHA_DEG[i])) * WHEEL_ROBOT_DIST,
-             np.sin(np.radians(WHEEL_ALPHA_DEG[i])) * WHEEL_ROBOT_DIST]
-            for i in range(4)
-        ]),
-        phi,
-    )
+    x_ddot, y_ddot, phi_ddot = body2world_accelerations(F, phi)
 
     return np.array([
         vx,
@@ -187,7 +162,6 @@ def robot_state_derivative(state, theta_dot):
         phi_ddot,
     ])
 
-from williams_model import all_wheel_forces, mu_d, mu_a
 # ---------------------------------------------------------------------------
 # Simulation
 # ---------------------------------------------------------------------------
@@ -201,6 +175,8 @@ def run_simulation(velocity_target):
     theta_dot = np.zeros(4)
     integral_error = np.zeros(3)
     previous_velocity = np.zeros(3)
+    F_required = np.zeros(4)
+    motor_torque = np.zeros(4)
 
     time = np.arange(0.0, SIMULATION_TIME, DT)
 
@@ -212,13 +188,13 @@ def run_simulation(velocity_target):
     mse_history = np.zeros(len(time))
     wheel_force_d_history = np.zeros((len(time), 4))
     wheel_slip_d_history = np.zeros((len(time), 4))
+    wheel_force_a_history = np.zeros((len(time), 4))
+    wheel_slip_a_history = np.zeros((len(time), 4))
 
     iq_history = np.zeros((len(time), 4))
 
-    phi = state[2]
-
     def robot_derivative(state):
-            return robot_state_derivative(state, theta_dot)
+        return robot_state_derivative(state, F)
 
     for k, t in enumerate(time):
 
@@ -235,53 +211,64 @@ def run_simulation(velocity_target):
 
         integral_error = integral_error + DT * integral_error_dot
 
+        x, y, phi, vx, vy, omega = state
+
         theta_dot_cmd = inverse_kinematics(velocity_cmd, phi)
 
-        for _ in range(int(DT / ACTUATOR_DT)):
-            F, F_d, v_slip_d, v_slip_a = all_wheel_forces(velocity[:2], velocity[2], theta_dot)
+        rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+        velocity_body = np.dot(rotation, np.array([vx, vy]))
 
-            load_torque = wheel_load_torques(F)
+        # motor torque is one timestep delayed because it is an effect not a cause.
+        F_required = required_static_friction(velocity_body, omega, motor_torque)
+        F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
 
-            theta_dot, theta_ddot, iq = actuator_model(theta_dot_cmd, theta_dot, load_torque, ACTUATOR_DT) #theta_dot = actuator_model(theta_dot_cmd, theta_dot, load_torque, ACTUATOR_DT)
+        load_torque = wheel_load_torques(F_d)
 
-            for i in range(4):
-                wheel_force_d_history[k, i] = F_d[i] / (ROBOT_MASS * GRAVITY / N_WHEELS)
-                wheel_slip_d_history[k, i] = v_slip_d[i]
-                iq_history[k, i] = iq[i]
+        theta_dot, theta_ddot, iq, iq_dot = actuator_model(theta_dot_cmd, theta_dot, load_torque, DT) #theta_dot = actuator_model(theta_dot_cmd, theta_dot, load_torque, ACTUATOR_DT)
 
-            linear_accel = np.linalg.norm(robot_state_derivative(state, theta_dot)[3:5])
+        motor_torque = iq * MOTOR_KT
 
-            if k % 100 == 0 and _ == 0:
-                print(f"F={F} slips_d={v_slip_d} slips_a={v_slip_a}")
-    
-                print(f"t={t:.1f} v={velocity} cmd={velocity_cmd} wheels={theta_dot_cmd} actual={theta_dot}")
-                print(f"  F={F} slips_d={v_slip_d} slips_a={v_slip_a}")
-                print(f"  mu_d={mu_d(v_slip_d)} mu_a={mu_a(v_slip_a)}")
-                print(f"t={t:.1f} speed={np.linalg.norm(velocity[:2]):.3f} m/s "
-                    f"linear_accel={linear_accel:.3f} m/s² theta_ddot={theta_ddot}")
+        state_derivative = robot_state_derivative(state, F) # vx, vy, omega, x_ddot, y_ddot, phi_ddot
 
-        acceleration = robot_state_derivative(state, theta_dot)[3:5]
+        acceleration = state_derivative[3:5]
+
+        linear_accel = np.linalg.norm(acceleration)
+
+        state = rk4_step(state, DT, robot_derivative)
+
+        if k % 100 == 0:    
+            print(f"t={t:.1f} v={velocity} cmd={velocity_cmd} wheels={theta_dot_cmd} actual={theta_dot}")
+            print(f"  F={F} slips_d={v_slip_d} slips_a={v_slip_a}")
+            print(f"  mu_d={mu_d(v_slip_d)} mu_a={mu_a(v_slip_a)}")
+            print(f"  Fa = {F_a}  Fd = {F_d}")
+
+            print(f"t={t:.1f} speed={np.linalg.norm(velocity[:2]):.3f} m/s "
+                f"linear_accel={linear_accel:.3f} m/s² theta_ddot={theta_ddot}")
+
+        for i in range(4):
+            wheel_force_d_history[k, i] = F_d[i]
+            wheel_force_a_history[k, i] = F_a[i]
+            wheel_slip_d_history[k, i] = v_slip_d[i]
+            wheel_slip_a_history[k, i] = v_slip_a[i]
+            iq_history[k, i] = iq[i]
+
         linear_accel_history[k] = np.linalg.norm(acceleration)
         theta_ddot_history[k] = theta_ddot
         theta_dot_cmd_history[k] = theta_dot_cmd
 
-        if k % 100 == 0 and _ == 0:
+        if k % 100 == 0:
             print(f"t={time[k]:.1f} theta_ddot={theta_ddot_history[k]}")
 
-        state = rk4_step(state, DT, robot_derivative)
-
-        phi = state[2]
-
-    return time, state_history, theta_dot_history, theta_dot_cmd_history, linear_accel_history, theta_ddot_history, mse_history, wheel_force_d_history, wheel_slip_d_history, iq_history
+    return time, state_history, theta_dot_history, theta_dot_cmd_history, linear_accel_history, theta_ddot_history, mse_history, wheel_force_d_history, wheel_slip_d_history, iq_history, wheel_force_a_history, wheel_slip_a_history
 
 # ---------------------------------------------------------------------------
 # Plotting
 # ---------------------------------------------------------------------------
 
-def plot_simulation(time, state_history, theta_dot_history, theta_dot_cmd_history, acceleration_history, theta_ddot_history, mse_history, wheel_force_d_history, wheel_slip_d_history, iq_history):
+def plot_simulation(time, state_history, theta_dot_history, theta_dot_cmd_history, acceleration_history, theta_ddot_history, mse_history, wheel_force_d_history, wheel_slip_d_history, iq_history, wheel_force_a_history, wheel_slip_a_history,):
     """Plot robot velocity and wheel-speed response."""
 
-    fig, axes = plt.subplots(6, 1, figsize=(10, 18))
+    fig, axes = plt.subplots(5, 1, figsize=(8, 9))
 
     # Robot velocity
     axes[0].plot(time, state_history[:, 3], label="vx")
@@ -318,43 +305,72 @@ def plot_simulation(time, state_history, theta_dot_history, theta_dot_cmd_histor
     axes[3].grid()
     axes[3].legend()
 
-    axes[4].plot(time, wheel_force_d_history[:, 0], label="Wheel 1")
-    axes[4].plot(time, wheel_force_d_history[:, 1], label="Wheel 2")
-    axes[4].plot(time, wheel_force_d_history[:, 2], label="Wheel 3")
-    axes[4].plot(time, wheel_force_d_history[:, 3], label="Wheel 4")
-
-    axes[4].plot(time, wheel_slip_d_history[:, 0], "--", label="Wheel 1 Slip")
-    axes[4].plot(time, wheel_slip_d_history[:, 1], "--", label="Wheel 2 Slip")
-    axes[4].plot(time, wheel_slip_d_history[:, 2], "--", label="Wheel 3 Slip")
-    axes[4].plot(time, wheel_slip_d_history[:, 3], "--", label="Wheel 4 Slip")
-
-    axes[4].set_xlabel("Time (s)")
-    axes[4].set_ylabel("Force / Slip")
-    axes[4].set_title("Wheel d-axis Force and Slip Velocity")
-    axes[4].legend()
-    axes[4].grid()
-
     # Motor current
     for i in range(4):
-        axes[5].plot(time, iq_history[:, i], label=f"Wheel {i + 1}")
+        axes[4].plot(time, iq_history[:, i], label=f"Wheel {i + 1}")
 
 
-    axes[5].set_xlabel("Time [s]")
-    axes[5].set_ylabel("IQ [A]")
-    axes[5].set_title("Motor Current Command")
-    axes[5].grid()
-    axes[5].legend()
+    axes[4].set_xlabel("Time [s]")
+    axes[4].set_ylabel("IQ [A]")
+    axes[4].set_title("Motor Current Command")
+    axes[4].grid()
+    axes[4].legend()
+
+    plt.tight_layout()
+
+
+
+    fig, axes = plt.subplots(4, 1, figsize=(8, 8), sharex=True)
+
+    # D-axis slip velocity
+    for i in range(4):
+        axes[0].plot(time, wheel_slip_d_history[:, i], label=f"Wheel {i + 1}")
+    axes[0].axhline(0, color="black", linewidth=0.8)
+    axes[0].set_ylabel("Slip velocity [m/s]")
+    axes[0].set_title("D-axis slip velocity")
+    axes[0].grid()
+    axes[0].legend()
+
+    # A-axis slip velocity
+    for i in range(4):
+        axes[1].plot(time, wheel_slip_a_history[:, i], label=f"Wheel {i + 1}")
+    axes[1].axhline(0, color="black", linewidth=0.8)
+    axes[1].set_ylabel("Slip velocity [m/s]")
+    axes[1].set_title("A-axis slip velocity")
+    axes[1].grid()
+    axes[1].legend()
+
+    # D-axis friction force
+    for i in range(4):
+        axes[2].plot(time, wheel_force_d_history[:, i], label=f"Wheel {i + 1}")
+    axes[2].axhline(0, color="black", linewidth=0.8)
+    axes[2].set_ylabel("Force [N]")
+    axes[2].set_title("D-axis friction force")
+    axes[2].grid()
+    axes[2].legend()
+
+    # A-axis friction force
+    for i in range(4):
+        axes[3].plot(time, wheel_force_a_history[:, i], label=f"Wheel {i + 1}")
+    axes[3].axhline(0, color="black", linewidth=0.8)
+    axes[3].set_xlabel("Time [s]")
+    axes[3].set_ylabel("Force [N]")
+    axes[3].set_title("A-axis friction force")
+    axes[3].grid()
+    axes[3].legend()
+
+    fig.tight_layout()
 
     overall_mse = np.mean(mse_history)
     print(f"Overall velocity MSE = {overall_mse:.6f}")
 
-    plt.tight_layout()
+    
     plt.show()
 
 if __name__ == "__main__":
     velocity_target = np.array(target)
 
     #run_motor_test()
-    time, state_history, theta_dot_history, theta_dot_cmd_history, linear_accel_history, theta_ddot_history, mse_history, wheel_force_d_history, wheel_slip_d_history, iq_history = run_simulation(velocity_target)
+    time, state_history, theta_dot_history, theta_dot_cmd_history, linear_accel_history, theta_ddot_history, mse_history, wheel_force_d_history, wheel_slip_d_history, iq_history, wheel_force_a_history, wheel_slip_a_history = run_simulation(velocity_target)
 
-    plot_simulation(time, state_history, theta_dot_history, theta_dot_cmd_history, linear_accel_history, theta_ddot_history, mse_history, wheel_force_d_history, wheel_slip_d_history, iq_history)
+    plot_simulation(time, state_history, theta_dot_history, theta_dot_cmd_history, linear_accel_history, theta_ddot_history, mse_history, wheel_force_d_history, wheel_slip_d_history, iq_history, wheel_force_a_history, wheel_slip_a_history)

@@ -24,41 +24,11 @@ implemented. Only the base friction model (eq. 1-11) is used.
 
 from __future__ import annotations
 
+from robot_constants import MU_D_STAT, MU_D_DYN, MU_A_STAT, MU_A_DYN, ALPHA_D, ALPHA_A, K_SMOOTH_D, K_SMOOTH_A, F_N
+from robot_constants import WHEEL_INERTIA, ROBOT_INERTIA, ROBOT_MASS, N_WHEELS, WHEEL_NAMES
+from robot_constants import WHEEL_ALPHA_DEG, WHEEL_ROBOT_DIST, WHEEL_RADIUS
+
 import numpy as np
-
-
-# ---------------------------------------------------------------------------
-# Geometry constants
-# ---------------------------------------------------------------------------
-
-ROLLER_RADIUS = 0.014378 / 2       # roller radius [m] = 7.189 mm
-N_ROLLERS = 16
-ROLLER_PITCH = 2 * np.pi / N_ROLLERS   # 22.5 deg
-ROBOT_MASS = 2.698                  # [kg]
-GRAVITY = 9.81                       # [m/s^2]
-N_WHEELS = 4
-
-WHEEL_RADIUS = 0.0598292 / 2        # wheel radius [m] = 29.9146 mm
-
-# ---------------------------------------------------------------------------
-# Robot Geometry -- 4 wheels
-# ---------------------------------------------------------------------------
-
-WHEEL_NAMES = [
-    "front-right",
-    "front-left",
-    "back-left",
-    "back-right"
-]
-
-WHEEL_ALPHA_DEG = [
-    0.000 + 30.0,
-    180.0 - 30.0,
-    180.0 + 45.0,
-    360.0 - 45.0
-]
-
-WHEEL_ROBOT_DIST = (158.97 / 2) * 1e-3  # contact point circle radius
 
 
 # Wheel frame calculation based on the angle of the wheel from the first
@@ -182,46 +152,37 @@ def slip_velocities(V, omega, theta_dot, wheel_num):
 # Friction model -- Williams 2002, eq. (11)
 # ---------------------------------------------------------------------------
 
-# ASSUMED -- run tilt-test measurement first, but assumed values are okay
-MU_D_MAX = 0.8   # TBD: measure via tilt test (wheels aligned, common direction)
-MU_DYN = 0.3 # dynamic friction coefficient, assumed based on lower than the calculated slip at 2.5m/s => 0.422
-ALPHA_D = 1 # measure of how fast static friction decays to dynamic in the drive direction (no measure of this in the axial direction)
-"""
-F_sum_coeff = abs( d_hat[ y axis ] ) = abs( sin(30) ) + abs( sin(150) ) + abs( sin(-150) ) + abs( sin(-30) )
-Fd = ROBOT_MASS * 2.5 / F_sum_coeff
-FN = ROBOT_MASS*GRAVITY/N_WHEELS 
-MU_DYN_CORNER = Fd / FN = 0.422
-"""
 
-ASSUMED_MU_DYN_STAT_CORNER = 0.422 # 2.5m/s^2 limit where wheels start to slip in +y
-MU_A_MAX = 0.1   # TBD: measure via tilt test (wheels perpendicular)
-K_SMOOTH = 150.0  # Williams' own choice, for numerical stability
-
-
-def mu_d(v_slip_d, mu_d_max=MU_D_MAX, k=K_SMOOTH):
+def mu_d(v_slip_d):
     """mu_d(v_slip_d) = mu_d_max * (2/pi) * atan(k * v_slip_d)."""
-    return (2.0 / np.pi) * np.arctan(k * v_slip_d) * (MU_DYN + (MU_D_MAX - MU_DYN)*np.exp(-ALPHA_D * np.abs(v_slip_d)))
+    return  (MU_D_DYN + (MU_D_STAT - MU_D_DYN)*np.exp(-ALPHA_D * np.abs(v_slip_d)))
 
 
-def mu_a(v_slip_a, mu_a_max=MU_A_MAX, k=K_SMOOTH):
+def mu_a(v_slip_a):
     """mu_a(v_slip_a) = mu_a_max * (2/pi) * atan(k * v_slip_a)."""
-    return mu_a_max * (2.0 / np.pi) * np.arctan(k * v_slip_a)
+    return  (MU_A_DYN + (MU_A_STAT - MU_A_DYN)*np.exp(-ALPHA_A * np.abs(v_slip_a)))
 
 
-def wheel_force(V, omega, theta_dot, wheel_num):
+def wheel_force(V, omega, theta_dot, wheel_num, F_required):
     """Calculate wheel force from slip velocities."""
     d_hat, a_hat = wheel_frame(WHEEL_ALPHA_DEG[wheel_num])
 
     v_slip_d, v_slip_a = slip_velocities(V, omega, theta_dot, wheel_num)
-    F_N = (ROBOT_MASS * GRAVITY / N_WHEELS)
-    F_d = - F_N * mu_d(v_slip_d)
-    F_a = - F_N * mu_a(v_slip_a)
+    
+
+    if np.abs(F_required) <= MU_D_STAT*F_N:
+        F_d = F_required
+    else:
+        F_d = - F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
+
+    F_a = - F_N * mu_a(v_slip_a) * (2.0 / np.pi) * np.arctan(K_SMOOTH_A * v_slip_a) 
+
     F_i = F_d * d_hat +  F_a * a_hat
 
-    return F_i, F_d, v_slip_d, v_slip_a
+    return F_i, F_d, F_a, v_slip_d, v_slip_a
 
 
-def all_wheel_forces(V, omega, theta_dots):
+def all_wheel_forces(V, omega, theta_dot, F_required):
     """Calculate forces for all wheels.
 
     theta_dots contains the ACTUAL angular velocity of each wheel.
@@ -230,12 +191,62 @@ def all_wheel_forces(V, omega, theta_dots):
     v_slip_d = np.zeros(N_WHEELS)
     v_slip_a = np.zeros(N_WHEELS)
     F_d = np.zeros(N_WHEELS)
+    F_a = np.zeros(N_WHEELS)
 
     for i in range(N_WHEELS):
-        F[i], F_d[i], v_slip_d[i], v_slip_a[i] = wheel_force(V, omega, theta_dots[i], i)
+        F[i], F_d[i], F_a[i], v_slip_d[i], v_slip_a[i] = wheel_force(V, omega, theta_dot[i], i, F_required[i])
 
-    return F, F_d, v_slip_d, v_slip_a
+    return F, F_d, F_a, v_slip_d, v_slip_a
 
+def required_static_friction(V, omega, motor_torque):
+    """Solve the all-wheels-sticking equations for required drive friction."""
+
+    d_hat = np.zeros((N_WHEELS, 2))
+    a_hat = np.zeros((N_WHEELS, 2))
+    v_slip_a = np.zeros(N_WHEELS)
+    F_a = np.zeros((N_WHEELS, 2))
+
+
+    for i in range(N_WHEELS):
+        d_hat[i], a_hat[i] = wheel_frame(WHEEL_ALPHA_DEG[i])
+        #theta_dot can be zero because it has no effect on the axial slip velocity
+        #F_required can be zero because we do not want F_d nor care for it to be accurate. 
+        _, _, F_a[i], _, v_slip_a[i] = wheel_force(V, omega, 0, i, 0)
+
+    F_a_total = np.sum(F_a, axis=0)
+
+    A = np.zeros((N_WHEELS, N_WHEELS))
+    b = np.zeros(N_WHEELS)
+
+    for i in range(N_WHEELS):
+
+        # Known acceleration contribution from axial friction.
+        a_axial = np.dot(d_hat[i], F_a_total) / ROBOT_MASS # d_hat on a_axis is not necessarily zero for other wheels
+
+        # Known contribution from the changing wheel-frame direction.
+        a_slip = - omega * v_slip_a[i]
+
+        # Known wheel angular acceleration contribution from motor torque.
+        a_motor = WHEEL_RADIUS * motor_torque[i] / WHEEL_INERTIA
+
+        # Right-hand side: move known terms to the other side.
+        b[i] = -(a_axial + a_slip + a_motor)
+
+        for j in range(N_WHEELS):
+
+            # Translational acceleration caused by drive friction at wheel j.
+            a_translation = np.dot(d_hat[i], d_hat[j]) / ROBOT_MASS
+
+            # Rotational acceleration coupling between wheels i and j.
+            a_rotation = WHEEL_ROBOT_DIST**2 / ROBOT_INERTIA
+
+            # Wheel angular acceleration caused by its own drive friction.
+            a_wheel = WHEEL_RADIUS**2 / WHEEL_INERTIA if i == j else 0.0
+
+            # Combine the three contributions into A[i, j].
+            A[i, j] = a_translation + a_rotation - a_wheel
+
+    return np.linalg.solve(A, b)
 
 # ---------------------------------------------------------------------------
 # Self-tests

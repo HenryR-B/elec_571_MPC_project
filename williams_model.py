@@ -169,11 +169,22 @@ def wheel_force(V, omega, theta_dot, wheel_num, F_required):
 
     v_slip_d, v_slip_a = slip_velocities(V, omega, theta_dot, wheel_num)
     
+    
+    F_static_max = MU_D_STAT * F_N
+    F_sliding = -F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
 
-    if np.abs(F_required) <= MU_D_STAT*F_N:
+    blend_start = 0.9 * F_static_max
+    blend_end = 1.1 * F_static_max
+    q = np.abs(F_required)
+
+    if q <= blend_start:
         F_d = F_required
+    elif q >= blend_end:
+        F_d = F_sliding
     else:
-        F_d = - F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
+        x = (q - blend_start) / (blend_end - blend_start)
+        w = x * x * (3.0 - 2.0 * x)
+        F_d = (1.0 - w) * F_required + w * F_sliding
 
     F_a = - F_N * mu_a(v_slip_a) * (2.0 / np.pi) * np.arctan(K_SMOOTH_A * v_slip_a) 
 
@@ -241,11 +252,10 @@ def rolling_acceleration(robot_accel_body, omega_dot, omega):
 def required_static_friction(motor_torque, robot_accel_body, omega_dot, omega):
     """Solve the all-wheels-sticking equations for required drive friction."""
     # solve Freq = ...
-    # theta_ddot = (Tmotor - Tload) / Jwheel
+    # theta_ddot = (Tmotor - (-Tload)) / Jwheel
     
     theta_ddot = rolling_acceleration(robot_accel_body, omega_dot, omega)
-    load_torque = WHEEL_INERTIA * theta_ddot
-    F_required = (motor_torque - load_torque) / WHEEL_RADIUS
+    F_required = (WHEEL_INERTIA * theta_ddot - motor_torque) / WHEEL_RADIUS
 
     return F_required
 

@@ -54,8 +54,8 @@ N_ROLLERS = 16
 ROLLER_PITCH = 2 * np.pi / N_ROLLERS   # 22.5 deg
 
 # Motor
-VEL_P_GAIN = 0.05
-VEL_I_GAIN = 0.8  
+VEL_P_GAIN = 0.04
+VEL_I_GAIN = 0.2
 
 VOLTAGE_LIMIT = 16.8
 IQ_LIMIT = 20.0  # [A]

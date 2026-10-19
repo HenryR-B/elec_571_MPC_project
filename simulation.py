@@ -59,28 +59,29 @@ target = [1, 0, 0]
 
 MAX_ACCELERATION = 2.5  # m/s^2
 
+
 def run_motor_test():
-    #reset_actuator()
+    reset_actuator()
 
     velocity = np.array([0.0, 5.0, 0.0])
     theta_dot = np.zeros(4)
-    theta_dot_cmd = np.zeros(4)
     load_torque = np.zeros(4)
-
     theta_dot_cmd = inverse_kinematics(velocity, 0.0)
 
     print("Commanded wheel speeds (rad/s):")
     for i in range(4):
         print(f"  Wheel {i + 1}: {theta_dot_cmd[i]:.3f}")
 
-    time = np.arange(0.0, 1, DT)
+    time = np.arange(0.0, SIMULATION_TIME, DT)
 
     theta_dot_history = np.zeros((len(time), 4))
     theta_ddot_history = np.zeros((len(time), 4))
     iq_history = np.zeros((len(time), 4))
 
     for k, t in enumerate(time):
-        theta_dot, theta_ddot, iq = actuator_model(theta_dot_cmd, theta_dot, load_torque, DT)
+        theta_dot, theta_ddot, iq = actuator_model(
+            theta_dot_cmd, theta_dot, load_torque, DT
+        )
 
         theta_dot_history[k] = theta_dot
         theta_ddot_history[k] = theta_ddot
@@ -90,27 +91,23 @@ def run_motor_test():
 
     for i in range(4):
         axes[0].plot(time, theta_dot_history[:, i], label=f"Wheel {i + 1} actual")
-        axes[0].axhline(theta_dot_cmd[i], linestyle="--", label=f"Wheel {i + 1} command: {theta_dot_cmd[i]:.2f} rad/s")
-
+        axes[0].axhline(theta_dot_cmd[i], linestyle="--",
+                        label=f"Wheel {i + 1} command")
         axes[1].plot(time, iq_history[:, i], label=f"Wheel {i + 1}")
-
         axes[2].plot(time, theta_ddot_history[:, i], label=f"Wheel {i + 1}")
 
     axes[0].set_ylabel("Angular velocity (rad/s)")
-    axes[0].legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
-    axes[0].grid()
-
     axes[1].set_ylabel("Iq (A)")
-    axes[1].legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
-    axes[1].grid()
-
     axes[2].set_ylabel("Angular acceleration (rad/s²)")
     axes[2].set_xlabel("Time (s)")
-    axes[2].legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
-    axes[2].grid()
+
+    for ax in axes:
+        ax.grid()
+        ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
 
     plt.tight_layout()
     plt.show()
+
 
 
 # ---------------------------------------------------------------------------
@@ -132,11 +129,18 @@ def wheel_load_torques(Fd):
 # Robot state derivative
 # ---------------------------------------------------------------------------
 
-def robot_state_derivative(state, F):
+def robot_state_derivative(state, theta_dot, F_required):
     """Return the derivative of the robot physical state."""
 
     x, y, phi, vx, vy, omega = state
 
+    rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+
+    velocity_world = np.array([vx, vy])
+
+    velocity_body = np.dot(rotation, velocity_world)
+
+    F, _, _, _, _ = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
     x_ddot, y_ddot, phi_ddot = body2world_accelerations(F, phi)
 
     return np.array([
@@ -171,7 +175,7 @@ def run_simulation(velocity_target):
     history = initialize_history(time)
 
     def robot_derivative(state):
-        return robot_state_derivative(state, F)
+        return robot_state_derivative(state, theta_dot, F_required)
 
     for k, t in enumerate(time):
         velocity = state[3:6]
@@ -191,7 +195,7 @@ def run_simulation(velocity_target):
 
         robot_accel_body = np.dot(rotation, robot_accel)
 
-        F_required = required_static_friction(motor_torque, robot_accel_body, omega_dot, omega) #F_required = np.full(4, 100.0) #
+        F_required = F_required = np.full(4, 100.0) # required_static_friction(motor_torque, robot_accel_body, omega_dot, omega) #F_required = np.full(4, 100.0) #
         F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
 
         load_torque = wheel_load_torques(F_d)
@@ -200,7 +204,7 @@ def run_simulation(velocity_target):
 
         motor_torque = iq * MOTOR_KT
 
-        state_derivative = robot_state_derivative(state, F) # vx, vy, omega, x_ddot, y_ddot, phi_ddot
+        state_derivative = robot_state_derivative(state, theta_dot, F_required) # vx, vy, omega, x_ddot, y_ddot, phi_ddot
 
         robot_accel = state_derivative[3:5]
         omega_dot = state_derivative[5]

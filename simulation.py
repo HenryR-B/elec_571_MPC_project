@@ -32,7 +32,7 @@ from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 
-from actuator_model import actuator_model, reset as reset_actuator
+from actuator_model import actuator_model, compute_trial_iq, reset as reset_actuator
 from controller_pid import controller_pid
 from integrator import rk4_step
 from robot_dynamics import body2world_accelerations
@@ -42,7 +42,7 @@ from williams_model import (
     required_static_friction, mu_d, mu_a
 )
 
-from robot_constants import WHEEL_RADIUS, MOTOR_KT
+from robot_constants import WHEEL_RADIUS, MOTOR_KT, F_N, MU_D_STAT
 
 # ---------------------------------------------------------------------------
 # Simulation parameters
@@ -55,7 +55,7 @@ KP = np.array([10, 10, 10])
 KI = np.array([5, 5, 10])
 KD = np.array([0.1, 0.1, 0.2])
 
-target = [1, 0, 0]
+target = [0, 1, 0]
 
 MAX_ACCELERATION = 2.5  # m/s^2
 
@@ -152,6 +152,46 @@ def robot_state_derivative(state, theta_dot, F_required):
         phi_ddot,
     ])
 
+def find_converged_friction(t, state, velocity_body, theta_dot, theta_dot_cmd, F_required_prev):
+    """
+    Pure algebraic constraint solver for F_required.
+    """
+    x, y, phi, vx, vy, omega = state
+    rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+    
+    F_required = F_required_prev
+    TOL = 1e-4
+    MAX_ITER = 100
+    count = 0
+
+    for iteration in range(MAX_ITER):
+        F_required_prev = F_required
+
+        # A. Calculate wheel forces using current estimate of F_required
+        # (If F_required is > mu_stat* FN this evaluation will correctly use F_sliding)
+        F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
+        load_torque = wheel_load_torques(F_d)
+
+        # C. Pure derivative/current calculation (NO STATE INTEGRATION)
+        iq = compute_trial_iq(theta_dot_cmd, theta_dot, load_torque)
+        motor_torque = iq * MOTOR_KT
+
+        # D. Chassis accelerations given these wheel forces
+        state_deriv = robot_state_derivative(state, theta_dot, F_required)
+        robot_accel_body = np.dot(rotation, state_deriv[3:5])
+        omega_dot = state_deriv[5]
+
+        # E. Recalculate static friction required
+        F_required = required_static_friction(motor_torque, robot_accel_body, omega_dot, omega)
+
+        # F. Check convergence
+        err = np.max(abs(np.abs(F_required) - abs(F_required_prev)))
+        count = count + 1
+        if err < TOL:
+            break
+
+    # print(f"Converging timestep t = {t:.4f} : error = {err:.3f}, iterations: {count}")
+    return F_required
 
 # ---------------------------------------------------------------------------
 # Simulation
@@ -167,8 +207,11 @@ def run_simulation(velocity_target):
     integral_error = np.zeros(3)
     previous_velocity = np.zeros(3)
     F_required = np.zeros(4)
+    F_required_prev = np.zeros(4)
     motor_torque = np.zeros(4)
+    load_torque = np.zeros(4)
     robot_accel = np.zeros(2)
+    robot_accel_body = np.zeros(2)
     omega_dot = 0.0
 
     time = np.arange(0.0, SIMULATION_TIME, DT)
@@ -191,22 +234,23 @@ def run_simulation(velocity_target):
         rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
         velocity_body = np.dot(rotation, np.array([vx, vy]))
 
-        # motor torque is one timestep delayed because it is an effect not a cause.
-
-        robot_accel_body = np.dot(rotation, robot_accel)
-
-        F_required = F_required = np.full(4, 100.0) # required_static_friction(motor_torque, robot_accel_body, omega_dot, omega) #F_required = np.full(4, 100.0) #
+        # calculation is one timestep delayed (known limitation)
+        F_required = find_converged_friction(t, state, velocity_body, theta_dot, theta_dot_cmd, F_required_prev)
+        #F_required = required_static_friction(motor_torque, robot_accel_body, omega_dot, omega) #F_required = np.full(4, 100.0) #np.full(4, 100.0) # 
         F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
+        F_required_prev = F_required
 
         load_torque = wheel_load_torques(F_d)
 
         theta_dot, theta_ddot, iq = actuator_model(theta_dot_cmd, theta_dot, load_torque, DT)
 
+        
         motor_torque = iq * MOTOR_KT
 
         state_derivative = robot_state_derivative(state, theta_dot, F_required) # vx, vy, omega, x_ddot, y_ddot, phi_ddot
 
         robot_accel = state_derivative[3:5]
+        robot_accel_body = np.dot(rotation, robot_accel)
         omega_dot = state_derivative[5]
 
         linear_accel = np.linalg.norm(robot_accel)

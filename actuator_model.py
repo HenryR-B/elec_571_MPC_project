@@ -1,3 +1,4 @@
+
 """
 actuator_model.py
 =================
@@ -18,8 +19,8 @@ Outputs:
     theta_ddot[4]      wheel angular accelerations [rad/s^2]
     iq[4]              commanded motor currents [A]
 
-Wheel dynamics are integrated using RK4. Current responds
-instantaneously to the controller command.
+The PI controller updates discretely once per timestep.
+Current and load torque are held constant during the timestep.
 """
 
 from __future__ import annotations
@@ -51,14 +52,18 @@ def derivatives(theta_dot_cmd, theta_dot_stage, integral_stage, load_torque):
 def actuator_model(theta_dot_cmd, theta_dot, load_torque, dt):
     global integral_state
 
-    k1_i, k1_w, _ = derivatives(theta_dot_cmd, theta_dot, integral_state, load_torque)
-    k2_i, k2_w, _ = derivatives(theta_dot_cmd, theta_dot + 0.5 * dt * k1_w, integral_state + 0.5 * dt * k1_i, load_torque)
-    k3_i, k3_w, _ = derivatives(theta_dot_cmd, theta_dot + 0.5 * dt * k2_w, integral_state + 0.5 * dt * k2_i, load_torque)
-    k4_i, k4_w, _ = derivatives(theta_dot_cmd, theta_dot + dt * k3_w, integral_state + dt * k3_i, load_torque)
+    integral_dot, theta_ddot, iq = derivatives(theta_dot_cmd, theta_dot, integral_state, load_torque)
 
-    theta_dot_new = theta_dot + (dt / 6.0) * (k1_w + 2.0 * k2_w + 2.0 * k3_w + k4_w)
-    integral_state += (dt / 6.0) * (k1_i + 2.0 * k2_i + 2.0 * k3_i + k4_i)
-
-    _, theta_ddot, iq = derivatives(theta_dot_cmd, theta_dot_new, integral_state, load_torque)
+    theta_dot_new = theta_dot + theta_ddot * dt
+    integral_state += integral_dot * dt
 
     return theta_dot_new, theta_ddot, iq
+
+def compute_trial_iq(theta_dot_cmd, theta_dot, load_torque):
+    """
+    Calculates iq using the module's internal integral_state, 
+    but does NOT modify or advance it.
+    """
+    # Use actuator_derivatives or your existing PI logic internally
+    theta_ddot, integral_dot, iq = actuator_derivatives(theta_dot_cmd, theta_dot, integral_state, load_torque)
+    return iq

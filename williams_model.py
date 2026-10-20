@@ -173,17 +173,21 @@ def wheel_force(V, omega, theta_dot, wheel_num, F_required):
     F_static_max = MU_D_STAT * F_N
     F_sliding = -F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
 
-    blend_start = 0.9 * F_static_max
-    blend_end = 1.1 * F_static_max
-    q = np.abs(F_required)
+    blend_start = 0.7 * F_static_max
 
-    if q <= blend_start:
+    if np.abs(F_required) <= blend_start:
         F_d = F_required
-    elif q >= blend_end:
+    elif np.abs(F_required) > F_static_max:
         F_d = F_sliding
     else:
-        x = (q - blend_start) / (blend_end - blend_start)
+        # Zone 3: Wide, gentle transition zone
+        # Normalizes x from 0.0 (at 50% grip) to 1.0 (at 100% grip)
+        x = (np.abs(F_required) - blend_start) / (F_static_max - blend_start)
+        
+        # Smooth cubic S-curve (w goes smoothly from 0 to 1)
         w = x * x * (3.0 - 2.0 * x)
+        
+        # Blends smoothly between required force and sliding force
         F_d = (1.0 - w) * F_required + w * F_sliding
 
     F_a = - F_N * mu_a(v_slip_a) * (2.0 / np.pi) * np.arctan(K_SMOOTH_A * v_slip_a) 

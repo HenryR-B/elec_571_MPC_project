@@ -240,8 +240,8 @@ def rolling_acceleration(robot_accel_body, omega_dot, omega):
         
         # Exact wheel-center acceleration in body frame:
         # a_wheel = a_robot_body + (omega_dot x r_i) - (omega^2 * r_i)
-        centripetal = -(omega**2) * r[i]
         angular_accel_term = cross_2d_z(omega_dot, r[i])
+        centripetal = cross_2d_z(omega, cross_2d_z(omega, r[i]))
         
         wheel_accel = np.dot(robot_accel_body + angular_accel_term + centripetal, d_hat[i])
         wheel_angular_accel[i] = -wheel_accel / WHEEL_RADIUS

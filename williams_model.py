@@ -151,7 +151,10 @@ def slip_velocities(V, omega, theta_dot, wheel_num):
 # ---------------------------------------------------------------------------
 # Friction model -- Williams 2002, eq. (11)
 # ---------------------------------------------------------------------------
-
+held_sign_d = np.zeros(N_WHEELS)
+held_sign_a = np.zeros(N_WHEELS)
+slip_threshold = 0.5
+release_threshold = 0.7
 
 def mu_d(v_slip_d):
     """mu_d(v_slip_d) = mu_d_max * (2/pi) * atan(k * v_slip_d)."""
@@ -163,41 +166,38 @@ def mu_a(v_slip_a):
     return  (MU_A_DYN + (MU_A_STAT - MU_A_DYN)*np.exp(-ALPHA_A * np.abs(v_slip_a)))
 
 
-def wheel_force(V, omega, theta_dot, wheel_num, F_required):
+def wheel_force(V, omega, theta_dot, wheel_num):
     """Calculate wheel force from slip velocities."""
     d_hat, a_hat = wheel_frame(WHEEL_ALPHA_DEG[wheel_num])
 
     v_slip_d, v_slip_a = slip_velocities(V, omega, theta_dot, wheel_num)
-    
-    
-    F_static_max = MU_D_STAT * F_N
-    F_sliding = -F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
 
-    blend_start = 0.7 * F_static_max
+    if held_sign_d[wheel_num] != 0 and abs(v_slip_d) > release_threshold:
+        held_sign_d[wheel_num] = 0
 
-    if np.abs(F_required) <= blend_start:
-        F_d = F_required
-    elif np.abs(F_required) > F_static_max:
-        F_d = F_sliding
-    else:
-        # Zone 3: Wide, gentle transition zone
-        # Normalizes x from 0.0 (at 50% grip) to 1.0 (at 100% grip)
-        x = (np.abs(F_required) - blend_start) / (F_static_max - blend_start)
-        
-        # Smooth cubic S-curve (w goes smoothly from 0 to 1)
-        w = x * x * (3.0 - 2.0 * x)
-        
-        # Blends smoothly between required force and sliding force
-        F_d = (1.0 - w) * F_required + w * F_sliding
+    if held_sign_d[wheel_num] == 0:
+        if abs(v_slip_d) < slip_threshold and v_slip_d != 0:
+            held_sign_d[wheel_num] = np.sign(v_slip_d)
+        F_d = - F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
+    else :
+        F_d = - held_sign_d[wheel_num] * F_N * mu_d(abs(v_slip_d))
 
-    F_a = - F_N * mu_a(v_slip_a) * (2.0 / np.pi) * np.arctan(K_SMOOTH_A * v_slip_a) 
+    if held_sign_a[wheel_num] != 0 and abs(v_slip_a) > release_threshold:
+        held_sign_a[wheel_num] = 0
+
+    if held_sign_a[wheel_num] == 0:
+        if abs(v_slip_a) < slip_threshold and v_slip_a != 0:
+            held_sign_a[wheel_num] = np.sign(v_slip_a)
+        F_a = - F_N * mu_a(v_slip_a) * (2.0 / np.pi) * np.arctan(K_SMOOTH_A * v_slip_a) 
+    else :
+        F_a = - held_sign_a[wheel_num] * F_N * mu_a(abs(v_slip_a))
 
     F_i = F_d * d_hat +  F_a * a_hat
 
     return F_i, F_d, F_a, v_slip_d, v_slip_a, d_hat, a_hat
 
 # F_required is a four element list containing the static friction assuming that one wheel has no slip
-def all_wheel_forces(V, omega, theta_dot, F_required):
+def all_wheel_forces(V, omega, theta_dot):
     """Calculate forces for all wheels.
 
     theta_dots contains the ACTUAL angular velocity of each wheel.
@@ -209,7 +209,7 @@ def all_wheel_forces(V, omega, theta_dot, F_required):
     F_a = np.zeros(N_WHEELS)
 
     for i in range(N_WHEELS):
-        F[i], F_d[i], F_a[i], v_slip_d[i], v_slip_a[i], _, _ = wheel_force(V, omega, theta_dot[i], i, F_required[i])
+        F[i], F_d[i], F_a[i], v_slip_d[i], v_slip_a[i], _, _ = wheel_force(V, omega, theta_dot[i], i)
 
     return F, F_d, F_a, v_slip_d, v_slip_a
 

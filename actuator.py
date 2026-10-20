@@ -35,7 +35,5 @@ def actuator_derivatives(theta_dot_cmd, theta_dot, integral_state, load_torque):
     motor_torque = MOTOR_KT * iq
     
     theta_ddot = (motor_torque + load_torque) / WHEEL_INERTIA # load torque, from d axis force, is already negative
-
     
-
     return integral_state_dot, theta_ddot, iq

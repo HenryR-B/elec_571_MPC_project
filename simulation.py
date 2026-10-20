@@ -129,7 +129,7 @@ def wheel_load_torques(Fd):
 # Robot state derivative
 # ---------------------------------------------------------------------------
 
-def robot_state_derivative(state, theta_dot, F_required):
+def robot_state_derivative(state, theta_dot):
     """Return the derivative of the robot physical state."""
 
     x, y, phi, vx, vy, omega = state
@@ -140,7 +140,7 @@ def robot_state_derivative(state, theta_dot, F_required):
 
     velocity_body = np.dot(rotation, velocity_world)
 
-    F, _, _, _, _ = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
+    F, _, _, _, _ = all_wheel_forces(velocity_body, omega, theta_dot)
     x_ddot, y_ddot, phi_ddot = body2world_accelerations(F, phi)
 
     return np.array([
@@ -151,47 +151,6 @@ def robot_state_derivative(state, theta_dot, F_required):
         y_ddot,
         phi_ddot,
     ])
-
-def find_converged_friction(t, state, velocity_body, theta_dot, theta_dot_cmd, F_required_prev):
-    """
-    Pure algebraic constraint solver for F_required.
-    """
-    x, y, phi, vx, vy, omega = state
-    rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
-    
-    F_required = F_required_prev
-    TOL = 1e-4
-    MAX_ITER = 100
-    count = 0
-
-    for iteration in range(MAX_ITER):
-        F_required_prev = F_required
-
-        # A. Calculate wheel forces using current estimate of F_required
-        # (If F_required is > mu_stat* FN this evaluation will correctly use F_sliding)
-        F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
-        load_torque = wheel_load_torques(F_d)
-
-        # C. Pure derivative/current calculation (NO STATE INTEGRATION)
-        iq = compute_trial_iq(theta_dot_cmd, theta_dot, load_torque)
-        motor_torque = iq * MOTOR_KT
-
-        # D. Chassis accelerations given these wheel forces
-        state_deriv = robot_state_derivative(state, theta_dot, F_required)
-        robot_accel_body = np.dot(rotation, state_deriv[3:5])
-        omega_dot = state_deriv[5]
-
-        # E. Recalculate static friction required
-        F_required = required_static_friction(motor_torque, robot_accel_body, omega_dot, omega)
-
-        # F. Check convergence
-        err = np.max(abs(np.abs(F_required) - abs(F_required_prev)))
-        count = count + 1
-        if err < TOL:
-            break
-
-    # print(f"Converging timestep t = {t:.4f} : error = {err:.3f}, iterations: {count}")
-    return F_required
 
 # ---------------------------------------------------------------------------
 # Simulation
@@ -206,19 +165,16 @@ def run_simulation(velocity_target):
     theta_dot = np.zeros(4)
     integral_error = np.zeros(3)
     previous_velocity = np.zeros(3)
-    F_required = np.zeros(4)
-    F_required_prev = np.zeros(4)
-    motor_torque = np.zeros(4)
     load_torque = np.zeros(4)
     robot_accel = np.zeros(2)
-    robot_accel_body = np.zeros(2)
-    omega_dot = 0.0
+
+
 
     time = np.arange(0.0, SIMULATION_TIME, DT)
     history = initialize_history(time)
 
     def robot_derivative(state):
-        return robot_state_derivative(state, theta_dot, F_required)
+        return robot_state_derivative(state, theta_dot)
 
     for k, t in enumerate(time):
         velocity = state[3:6]
@@ -234,34 +190,28 @@ def run_simulation(velocity_target):
         rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
         velocity_body = np.dot(rotation, np.array([vx, vy]))
 
-        # calculation is one timestep delayed (known limitation)
-        F_required = find_converged_friction(t, state, velocity_body, theta_dot, theta_dot_cmd, F_required_prev)
-        #F_required = required_static_friction(motor_torque, robot_accel_body, omega_dot, omega) #F_required = np.full(4, 100.0) #np.full(4, 100.0) # 
-        F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot, F_required)
-        F_required_prev = F_required
+        F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot)
 
         load_torque = wheel_load_torques(F_d)
 
         theta_dot, theta_ddot, iq = actuator_model(theta_dot_cmd, theta_dot, load_torque, DT)
 
-        
         motor_torque = iq * MOTOR_KT
 
-        state_derivative = robot_state_derivative(state, theta_dot, F_required) # vx, vy, omega, x_ddot, y_ddot, phi_ddot
+        state_derivative = robot_state_derivative(state, theta_dot) # vx, vy, omega, x_ddot, y_ddot, phi_ddot
 
         robot_accel = state_derivative[3:5]
-        robot_accel_body = np.dot(rotation, robot_accel)
         omega_dot = state_derivative[5]
 
         linear_accel = np.linalg.norm(robot_accel)
 
-        record_history(k, history, state, theta_dot, theta_dot_cmd, linear_accel, theta_ddot, F_required, F_d, F_a, v_slip_d, v_slip_a, iq)
+        record_history(k, history, state, theta_dot, theta_dot_cmd, linear_accel, theta_ddot, F_d, F_a, v_slip_d, v_slip_a, iq)
 
         state = rk4_step(state, DT, robot_derivative)
 
         if k % 500 == 0:
             fmt = lambda a: np.array2string(a, precision=3, separator=',', max_line_width=10000)
-            print(f"t={t:.4f} v={fmt(velocity)} cmd={fmt(velocity_cmd)} w={fmt(theta_dot)} wc={fmt(theta_dot_cmd)} F={fmt(F)} Fd={fmt(F_d)} Fa={fmt(F_a)} Fr={fmt(F_required)} sd={fmt(v_slip_d)} sa={fmt(v_slip_a)} mud={fmt(mu_d(v_slip_d))} mua={fmt(mu_a(v_slip_a))}")
+            print(f"t={t:.4f} v={fmt(velocity)} cmd={fmt(velocity_cmd)} w={fmt(theta_dot)} wc={fmt(theta_dot_cmd)} F={fmt(F)} Fd={fmt(F_d)} Fa={fmt(F_a)} sd={fmt(v_slip_d)} sa={fmt(v_slip_a)} mud={fmt(mu_d(v_slip_d))} mua={fmt(mu_a(v_slip_a))}")
 
 
     return time, history
@@ -282,7 +232,6 @@ def plot_simulation(time, history):
     iq_history = history["iq"]
     wheel_force_a_history = history["wheel_force_a"]
     wheel_slip_a_history = history["wheel_slip_a"]
-    F_required_history = history["F_required"]
 
     fig, axes = plt.subplots(5, 1, figsize=(8, 9))
 
@@ -358,8 +307,7 @@ def plot_simulation(time, history):
 
     # D-axis friction force
     for i in range(4):
-        line = axes[2].plot(time, wheel_force_d_history[:, i], label=f"Wheel {i + 1} actual")[0]
-        axes[2].plot(time, F_required_history[:, i], "--", color=line.get_color(), label=f"Wheel {i + 1} required")
+        axes[2].plot(time, wheel_force_d_history[:, i], label=f"Wheel {i + 1} actual")[0]
 
     axes[2].axhline(0, color="black", linewidth=0.8)
     axes[2].set_ylabel("Force [N]")
@@ -389,7 +337,6 @@ def initialize_history(time):
         "theta_dot_cmd": np.zeros((n, 4)),
         "linear_accel": np.zeros(n),
         "theta_ddot": np.zeros((n, 4)),
-        "F_required": np.zeros((n, 4)),
         "wheel_force_d": np.zeros((n, 4)),
         "wheel_force_a": np.zeros((n, 4)),
         "wheel_slip_d": np.zeros((n, 4)),
@@ -397,13 +344,12 @@ def initialize_history(time):
         "iq": np.zeros((n, 4)),
     }
 
-def record_history(k, history, state, theta_dot, theta_dot_cmd, linear_accel, theta_ddot, F_required, F_d, F_a, v_slip_d, v_slip_a, iq):
+def record_history(k, history, state, theta_dot, theta_dot_cmd, linear_accel, theta_ddot, F_d, F_a, v_slip_d, v_slip_a, iq):
     history["state"][k] = state
     history["theta_dot"][k] = theta_dot
     history["theta_dot_cmd"][k] = theta_dot_cmd
     history["linear_accel"][k] = linear_accel
     history["theta_ddot"][k] = theta_ddot
-    history["F_required"][k] = F_required
     history["wheel_force_d"][k] = F_d
     history["wheel_force_a"][k] = F_a
     history["wheel_slip_d"][k] = v_slip_d

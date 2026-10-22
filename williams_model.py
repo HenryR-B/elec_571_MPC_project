@@ -151,10 +151,9 @@ def slip_velocities(V, omega, theta_dot, wheel_num):
 # ---------------------------------------------------------------------------
 # Friction model -- Williams 2002, eq. (11)
 # ---------------------------------------------------------------------------
-held_sign_d = np.zeros(N_WHEELS)
-held_sign_a = np.zeros(N_WHEELS)
-slip_threshold = 0.5
-release_threshold = 0.7
+slip_threshold = 0.019261
+friction_direction_d = np.zeros(4)
+friction_direction_a = np.zeros(4)
 
 def mu_d(v_slip_d):
     """mu_d(v_slip_d) = mu_d_max * (2/pi) * atan(k * v_slip_d)."""
@@ -172,25 +171,8 @@ def wheel_force(V, omega, theta_dot, wheel_num):
 
     v_slip_d, v_slip_a = slip_velocities(V, omega, theta_dot, wheel_num)
 
-    if held_sign_d[wheel_num] != 0 and abs(v_slip_d) > release_threshold:
-        held_sign_d[wheel_num] = 0
-
-    if held_sign_d[wheel_num] == 0:
-        if abs(v_slip_d) < slip_threshold and v_slip_d != 0:
-            held_sign_d[wheel_num] = np.sign(v_slip_d)
-        F_d = - F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
-    else :
-        F_d = - held_sign_d[wheel_num] * F_N * mu_d(abs(v_slip_d))
-
-    if held_sign_a[wheel_num] != 0 and abs(v_slip_a) > release_threshold:
-        held_sign_a[wheel_num] = 0
-
-    if held_sign_a[wheel_num] == 0:
-        if abs(v_slip_a) < slip_threshold and v_slip_a != 0:
-            held_sign_a[wheel_num] = np.sign(v_slip_a)
-        F_a = - F_N * mu_a(v_slip_a) * (2.0 / np.pi) * np.arctan(K_SMOOTH_A * v_slip_a) 
-    else :
-        F_a = - held_sign_a[wheel_num] * F_N * mu_a(abs(v_slip_a))
+    F_d = -F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
+    F_a = -F_N * mu_a(v_slip_a) * (2.0 / np.pi) * np.arctan(K_SMOOTH_A * v_slip_a)
 
     F_i = F_d * d_hat +  F_a * a_hat
 

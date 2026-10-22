@@ -66,13 +66,13 @@ MOTOR_RESISTANCE = 0.24
 MOTOR_INDUCTANCE = 0.133e-3
 
 # Wheel Roller Friction
-MU_D_STAT = 1.15   # TBD: measure via tilt test (wheels aligned, common direction)
+MU_D_STAT = 0.9   # TBD: measure via tilt test (wheels aligned, common direction)
 MU_D_DYN = 0.422 # dynamic friction coefficient, assumed based on lower than the calculated slip at 2.5m/s => 0.422
 ALPHA_D = 10 # relatively fast transition from rolling to slipping due to motor torque
 K_SMOOTH_D = 200.0 
 
 
-MU_A_STAT = 0.11   # TBD: measure via tilt test (wheels perpendicular)
+MU_A_STAT = 0.3   # TBD: measure via tilt test (wheels perpendicular)
 MU_A_DYN = 0.324 # calculated as increase because bushings will be forced to move at a faster rate than they can without a driving force, increasing friction
 ALPHA_A = 1 # relatively slow transition from rolling to slipping
 K_SMOOTH_A = 200

@@ -39,7 +39,7 @@ from robot_dynamics import body2world_accelerations
 from williams_model import (
     all_wheel_forces,
     inverse_kinematics,
-    required_static_friction, mu_d, mu_a
+    required_static_friction, mu_d, mu_a, wheel_has_roller_contact
 )
 
 from robot_constants import WHEEL_RADIUS, MOTOR_KT, F_N, MU_D_STAT
@@ -130,9 +130,10 @@ def wheel_load_torques(Fd):
 # ---------------------------------------------------------------------------
 
 def robot_state_derivative(state, theta_dot):
-    """Return the derivative of the robot physical state."""
+    """Return the derivative of body state and four wheel angles."""
 
-    x, y, phi, vx, vy, omega = state
+    x, y, phi, vx, vy, omega = state[:6]
+    theta = state[6:10]
 
     rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
 
@@ -140,17 +141,13 @@ def robot_state_derivative(state, theta_dot):
 
     velocity_body = np.dot(rotation, velocity_world)
 
-    F, _, _, _, _ = all_wheel_forces(velocity_body, omega, theta_dot)
+    F, _, _, _, _ = all_wheel_forces(velocity_body, omega, theta_dot, theta)
     x_ddot, y_ddot, phi_ddot = body2world_accelerations(F, phi)
 
-    return np.array([
-        vx,
-        vy,
-        omega,
-        x_ddot,
-        y_ddot,
-        phi_ddot,
-    ])
+    return np.concatenate((
+        np.array([vx, vy, omega, x_ddot, y_ddot, phi_ddot]),
+        theta_dot,
+    ))
 
 # ---------------------------------------------------------------------------
 # Simulation
@@ -161,7 +158,7 @@ def run_simulation(velocity_target):
 
     reset_actuator()
 
-    state = np.zeros(6)
+    state = np.zeros(10)
     theta_dot = np.zeros(4)
     integral_error = np.zeros(3)
     previous_velocity = np.zeros(3)
@@ -178,7 +175,8 @@ def run_simulation(velocity_target):
 
     for k, t in enumerate(time):
         velocity = state[3:6]
-        x, y, phi, vx, vy, omega = state
+        x, y, phi, vx, vy, omega = state[:6]
+        theta = state[6:10]
 
         velocity_cmd, integral_error_dot = controller_pid(velocity_target, velocity, integral_error, previous_velocity, DT, KP, KI, KD)
         previous_velocity = velocity.copy()
@@ -191,7 +189,7 @@ def run_simulation(velocity_target):
         velocity_body = np.dot(rotation, np.array([vx, vy]))
 
         
-        F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot)
+        F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot, theta)
 
         load_torque = wheel_load_torques(F_d)
 
@@ -199,7 +197,7 @@ def run_simulation(velocity_target):
 
         motor_torque = iq * MOTOR_KT
 
-        state_derivative = robot_state_derivative(state, theta_dot) # vx, vy, omega, x_ddot, y_ddot, phi_ddot
+        state_derivative = robot_state_derivative(state, theta_dot) # body-state and wheel-angle derivatives
 
         robot_accel = state_derivative[3:5]
         omega_dot = state_derivative[5]
@@ -333,7 +331,9 @@ def plot_simulation(time, history):
 def initialize_history(time):
     n = len(time)
     return {
-        "state": np.zeros((n, 6)),
+        "state": np.zeros((n, 10)),
+        "wheel_angle": np.zeros((n, 4)),
+        "wheel_contact": np.zeros((n, 4), dtype=bool),
         "theta_dot": np.zeros((n, 4)),
         "theta_dot_cmd": np.zeros((n, 4)),
         "linear_accel": np.zeros(n),
@@ -347,6 +347,8 @@ def initialize_history(time):
 
 def record_history(k, history, state, theta_dot, theta_dot_cmd, linear_accel, theta_ddot, F_d, F_a, v_slip_d, v_slip_a, iq):
     history["state"][k] = state
+    history["wheel_angle"][k] = state[6:10]
+    history["wheel_contact"][k] = [wheel_has_roller_contact(angle) for angle in state[6:10]]
     history["theta_dot"][k] = theta_dot
     history["theta_dot_cmd"][k] = theta_dot_cmd
     history["linear_accel"][k] = linear_accel

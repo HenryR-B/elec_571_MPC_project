@@ -12,14 +12,11 @@ Calculates:
     - d and a (drive and axial) wheel slip velocities
     - wheel force from slip velocities, via assumed/measured friction coefficients
 
-NOTE ON THE FRICTION MODEL USED HERE:
-Williams' paper also presents an "improved" model that switches between two
-friction regimes depending on wheel angle, because their 8-roller wheel has
-exposed rigid material between adjacent rollers. Per direct inspection of
-our own wheel (16 rollers), the rollers are packed closely enough that the
-wheel material does NOT contact the floor between rollers before the next one
-engages -- so that two-regime switch does not apply here, and is not
-implemented. Only the base friction model (eq. 1-11) is used.
+ROLLER CONTACT MODEL:
+Each wheel has its own integrated angle. Williams slip forces are calculated
+first, then both drive- and axle-direction forces are set to zero while that
+wheel is in the geometric gap between rollers. Rubber deflection is not
+included in this simplified rigid-geometry model.
 """
 
 from __future__ import annotations
@@ -27,6 +24,7 @@ from __future__ import annotations
 from robot_constants import MU_D_STAT, MU_D_DYN, MU_A_STAT, MU_A_DYN, ALPHA_D, ALPHA_A, K_SMOOTH_D, K_SMOOTH_A, F_N
 from robot_constants import WHEEL_INERTIA, ROBOT_INERTIA, ROBOT_MASS, N_WHEELS, WHEEL_NAMES
 from robot_constants import WHEEL_ALPHA_DEG, WHEEL_ROBOT_DIST, WHEEL_RADIUS
+from robot_constants import ROLLER_PITCH, ROLLER_WIDTH_DTHETA
 
 import numpy as np
 
@@ -165,25 +163,34 @@ def mu_a(v_slip_a):
     return  (MU_A_DYN + (MU_A_STAT - MU_A_DYN)*np.exp(-ALPHA_A * np.abs(v_slip_a)))
 
 
-def wheel_force(V, omega, theta_dot, wheel_num):
-    """Calculate wheel force from slip velocities."""
-    d_hat, a_hat = wheel_frame(WHEEL_ALPHA_DEG[wheel_num])
+def wheel_has_roller_contact(theta):
+    """Return True when the angle is in a roller-contact sector.
 
+    Angles are radians. Zero is the centre of a roller; sectors repeat every
+    ROLLER_PITCH.
+    """
+    phase = (theta + 0.5 * ROLLER_PITCH) % ROLLER_PITCH - 0.5 * ROLLER_PITCH
+    return abs(phase) <= 0.5 * np.radians(ROLLER_WIDTH_DTHETA)
+
+
+def wheel_force(V, omega, theta_dot, theta, wheel_num):
+    """Calculate slip forces, then gate the final force by roller contact."""
+    d_hat, a_hat = wheel_frame(WHEEL_ALPHA_DEG[wheel_num])
     v_slip_d, v_slip_a = slip_velocities(V, omega, theta_dot, wheel_num)
 
     F_d = -F_N * mu_d(v_slip_d) * (2.0 / np.pi) * np.arctan(K_SMOOTH_D * v_slip_d)
     F_a = -F_N * mu_a(v_slip_a) * (2.0 / np.pi) * np.arctan(K_SMOOTH_A * v_slip_a)
 
-    F_i = F_d * d_hat +  F_a * a_hat
+    contact = float(wheel_has_roller_contact(theta))
+    F_d *= contact
+    F_a *= contact
+    F_i = F_d * d_hat + F_a * a_hat
 
     return F_i, F_d, F_a, v_slip_d, v_slip_a, d_hat, a_hat
 
-# F_required is a four element list containing the static friction assuming that one wheel has no slip
-def all_wheel_forces(V, omega, theta_dot):
-    """Calculate forces for all wheels.
 
-    theta_dots contains the ACTUAL angular velocity of each wheel.
-    """
+def all_wheel_forces(V, omega, theta_dot, theta):
+    """Calculate forces using each wheel's current angle and contact state."""
     F = np.zeros((N_WHEELS, 2))
     v_slip_d = np.zeros(N_WHEELS)
     v_slip_a = np.zeros(N_WHEELS)
@@ -191,7 +198,7 @@ def all_wheel_forces(V, omega, theta_dot):
     F_a = np.zeros(N_WHEELS)
 
     for i in range(N_WHEELS):
-        F[i], F_d[i], F_a[i], v_slip_d[i], v_slip_a[i], _, _ = wheel_force(V, omega, theta_dot[i], i)
+        F[i], F_d[i], F_a[i], v_slip_d[i], v_slip_a[i], _, _ = wheel_force(V, omega, theta_dot[i], theta[i], i)
 
     return F, F_d, F_a, v_slip_d, v_slip_a
 
@@ -266,13 +273,21 @@ def _test_zero_velocity_zero_force():
     omega = 0.0
     theta_dots = np.zeros(N_WHEELS)
 
-    F, v_slip_d, v_slip_a = all_wheel_forces(V, omega, theta_dots)
+    F, _, _, v_slip_d, v_slip_a = all_wheel_forces(V, omega, theta_dots, np.zeros(N_WHEELS))
 
     assert np.allclose(v_slip_d, 0.0)
     assert np.allclose(v_slip_a, 0.0)
     assert np.allclose(F, 0.0, atol=1e-9), (f"nonzero force at zero velocity: {F}")
+    assert wheel_has_roller_contact(0.0)
+    assert not wheel_has_roller_contact(0.5 * ROLLER_PITCH)
 
-    print("  PASS: zero velocity produces zero slip and zero force")
+    gap_angles = np.full(N_WHEELS, 0.5 * ROLLER_PITCH)
+    F_gap, F_d_gap, F_a_gap, _, _ = all_wheel_forces(np.array([1.0, 0.0]), 0.0, theta_dots, gap_angles)
+    assert np.allclose(F_gap, 0.0)
+    assert np.allclose(F_d_gap, 0.0)
+    assert np.allclose(F_a_gap, 0.0)
+
+    print("  PASS: zero velocity and roller-gap force checks")
 
 
 def _test_pure_rolling_zero_drive_slip():

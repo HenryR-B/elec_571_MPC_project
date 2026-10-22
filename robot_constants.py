@@ -54,10 +54,8 @@ N_ROLLERS = 16
 ROLLER_PITCH = 2 * np.pi / N_ROLLERS   # 22.5 deg
 ROLLER_WIDTH = 3.545 * 1e-3 # roller width [m] = 3.545 mm
 ROLLER_GAP = 8.151 * 1e-3 # roller to roller gap at edge point on rollers [m] = 8.151 mm
-ROLLER_WIDTH_DTHETA = 6.793 # single roller width angle [deg] = 6.793 deg
-ROLLER_GAP_DTHETA = 15.661 # single roller gap angle [deg] = 15.661 deg
-ROLLER_WIDTH_DTHETA = ROLLER_PITCH * ROLLER_WIDTH / (ROLLER_WIDTH + ROLLER_GAP)  # 6.807 deg
-ROLLER_GAP_DTHETA = 22.5 - ROLLER_WIDTH_DTHETA                          # 15.693 deg
+ROLLER_WIDTH_DTHETA = np.degrees(ROLLER_PITCH) * ROLLER_WIDTH / (ROLLER_WIDTH + ROLLER_GAP)  # roller contact width [deg]
+ROLLER_GAP_DTHETA = np.degrees(ROLLER_PITCH) - ROLLER_WIDTH_DTHETA  # gap width [deg]
 
 
 # Motor

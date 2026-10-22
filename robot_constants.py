@@ -76,6 +76,10 @@ MU_D_DYN = 0.422 # dynamic friction coefficient, assumed based on lower than the
 ALPHA_D = 10 # relatively fast transition from rolling to slipping due to motor torque
 K_SMOOTH_D = 200.0 
 
+# F_N is the nominal normal load on one wheel. MU_D_STAT * F_N is the
+# corresponding per-wheel drive-traction threshold for equal load sharing.
+F_ROLL_LIMIT = MU_D_STAT * F_N
+
 
 MU_A_STAT = 0.3   # TBD: measure via tilt test (wheels perpendicular)
 MU_A_DYN = 0.324 # calculated as increase because bushings will be forced to move at a faster rate than they can without a driving force, increasing friction

@@ -190,6 +190,7 @@ def run_simulation(velocity_target):
         rotation = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
         velocity_body = np.dot(rotation, np.array([vx, vy]))
 
+        
         F, F_d, F_a, v_slip_d, v_slip_a = all_wheel_forces(velocity_body, omega, theta_dot)
 
         load_torque = wheel_load_torques(F_d)

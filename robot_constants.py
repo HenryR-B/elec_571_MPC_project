@@ -1,4 +1,13 @@
 import numpy as np
+
+# ---------------------------------------------------------------------------
+# Model options
+# ---------------------------------------------------------------------------
+# True: include the ESTIMATED wheel rolling resistance (literature-based, not
+# measured or calculated for this robot; see WHEEL_ROLLING_RESISTANCE_ESTIMATE
+# below). False: no rolling resistance (C_rr = 0).
+INCLUDE_ESTIMATED_ROLLING_RESISTANCE = True
+
 # Robot
 ROBOT_MASS = 2.698                  # [kg]
 GRAVITY = 9.81                       # [m/s^2]
@@ -113,12 +122,23 @@ K_SMOOTH_A = 200
 # losses that act on pure yaw: for pure spin the axial (roller) slip is zero
 # because each axle points at the robot centre. With both at 0 the plant is
 # lossless in yaw and coasts forever.
-# ASSUMED (not measured):
-#   C_rr = 0.02: rolling resistance on carpet is ~0.014-0.020 for wheelchair
-#     wheels (RESNA 2018); small wheels sit at the high end.
-#   b_w = 2e-4: same as WHEEL_VISCOUS_DRAG_NM_S_RAD in Dana's robot22102026D.
-# For scale, Conceicao et al. (2008) identified the equivalent of
-# b_w ~ 4.7e-4 and C_rr ~ 0.07 on a 2.34 kg 4-wheel robot with a 5:1 gearbox.
-WHEEL_ROLLING_RESISTANCE_COEFF = 0.02  # C_rr [-]            ASSUMED
+# ESTIMATED C_rr = 0.025 (switch: INCLUDE_ESTIMATED_ROLLING_RESISTANCE at the top).
+#   Duda et al. 2025 (Sensors 25:5026) measured a 125 mm omniwheel with
+#   95A polyurethane rollers on concrete/aluminium: drive-direction (0 deg)
+#   force/load = 0.008-0.010 (bearing friction included); axle-direction (90 deg,
+#   rollers rolling) = 0.044-0.047.
+#   Route 1: scale 0.009 for our 60 mm wheel (~x1.4, C_rr ~ 1/sqrt(D)) and carpet
+#     vs hard floor (~x2; carpet 0.014-0.020 for wheelchair wheels, RESNA 2018)
+#     -> ~0.025.
+#   Route 2: drive/axle ratio from Duda, 0.0088/0.044 ~ 0.2, times our measured
+#     MU_A_STAT (0.1-0.2, a lumped roller rolling resistance) -> 0.02-0.04.
+#   Upper bound: MU_A_STAT (it adds roller-bushing friction the main wheel lacks).
+#   For scale, Conceicao et al. (2008) identified the equivalent of C_rr ~ 0.07
+#   (and b_w ~ 4.7e-4) on a 2.34 kg 4-wheel robot with a 5:1 gearbox.
+# b_w = 2e-4 ASSUMED: same as WHEEL_VISCOUS_DRAG_NM_S_RAD in Dana's robot22102026D.
+WHEEL_ROLLING_RESISTANCE_ESTIMATE = 0.025  # C_rr [-]        ESTIMATED from literature
+WHEEL_ROLLING_RESISTANCE_COEFF = (
+    WHEEL_ROLLING_RESISTANCE_ESTIMATE if INCLUDE_ESTIMATED_ROLLING_RESISTANCE else 0.0
+)
 WHEEL_BEARING_VISCOUS_DRAG = 2.0e-4    # b_w [N m s/rad]     ASSUMED
 WHEEL_LOSS_SMOOTHING_SPEED = 0.5       # w_eps [rad/s], numerical regularization of sign(theta_dot)

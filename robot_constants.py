@@ -133,3 +133,30 @@ WHEEL_ROLLING_RESISTANCE_ESTIMATE = 0.025  # C_rr [-]        ESTIMATED from lite
 WHEEL_ROLLING_RESISTANCE_COEFF = WHEEL_ROLLING_RESISTANCE_ESTIMATE  # value used; the notebook switch can set 0
 WHEEL_BEARING_VISCOUS_DRAG = 2.0e-4    # b_w [N m s/rad]     ASSUMED
 WHEEL_LOSS_SMOOTHING_SPEED = 0.5       # w_eps [rad/s], numerical regularization of sign(theta_dot)
+
+
+# ---------------------------------------------------------------------------
+# Friction disturbance parameters (ESTIMATED surrogates, not measured). The on/off
+# switches are in the notebooks' configuration cell. Multiplier on each wheel's friction:
+#   f_i = clip(1 + b_i + a_i n_i, SCALE_MIN, SCALE_MAX),  n_i correlated noise in [-1, 1]
+#   a_i = min(MAX, BASE + kappa (eps/2) (N_ROLLERS |v_i| / R_w)^2 / g
+#                  + ACCEL_GAIN |theta_ddot_i| / REF_ACCEL + SLIP_GAIN min(1, |slip_i| / REF_SLIP))
+# ---------------------------------------------------------------------------
+# Envelope out-of-roundness eps (peak-to-peak axle height change while rolling).
+# Duda et al. 2021 (Sensors 21:6931) measured ~0.05 mm on a 125 mm double-row
+# omniwheel at 0 deg (pure rolling), 16 passes per revolution; ~0.03 mm at 90 deg.
+# A single-row gap estimate for our wheel, ROLLER_GAP^2 / (8 R_w) = 0.28 mm, is an upper
+# bound; double rows fill each other's gaps. 0 = perfectly round wheel.
+WHEEL_ENVELOPE_IRREGULARITY = 0.05e-3   # eps [m]                          ESTIMATED (Duda 2021)
+FRICTION_VIBRATION_COMPLIANCE = 0.3     # kappa: share of the rigid-axle acceleration that
+                                        # reaches the contact (X-ring compliance)  ESTIMATED
+FRICTION_VIBRATION_BASE = 0.02          # spread at rest                   ESTIMATED
+FRICTION_VIBRATION_ACCEL_GAIN = 0.10    # spread at REF_ACCEL              ESTIMATED
+FRICTION_VIBRATION_REF_ACCEL = 100.0    # [rad/s^2]
+FRICTION_VIBRATION_SLIP_GAIN = 0.10     # extra spread at REF_SLIP         ESTIMATED
+FRICTION_VIBRATION_REF_SLIP = 0.5       # [m/s]
+FRICTION_VIBRATION_MAX = 0.5            # cap on a_i
+FRICTION_VIBRATION_CORRELATION_TIME = 0.02  # [s]
+FRICTION_OFFSET_STD = 0.05              # fixed per-wheel spread (Dana's FRICTION_NOISE_STD)
+FRICTION_SCALE_MIN = 0.2                # clip on f_i
+FRICTION_SCALE_MAX = 1.8

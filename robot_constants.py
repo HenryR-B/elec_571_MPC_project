@@ -8,22 +8,60 @@ N_WHEELS = 4
 WHEEL_ROBOT_DIST = (158.97 / 2) * 1e-3  # contact point circle radius
 
 # ---------------------------------------------------------------------------
-# I_zz via parallel axis theorem, from CAD mass properties.
+# Mass properties from CAD (Onshape, whole robot).
 #
-# CAD reports (about the centre of gravity):
-#   I_zz(CoG) = 7443.681kg*mm^2
-#   CoG = (x=0.597, y=10.206, z=61.146) mm, relative to the CAD origin.
+# CAD reports, about the centre of gravity (CoG):
+#   I_xx = 6398.534, I_yy = 6120.905, I_zz = 7443.681 kg*mm^2
+#   products: I_xy = -45.569, I_xz = -3.279, I_yz = -424.089 kg*mm^2 (not used)
+#   CoG = (x=0.597, y=10.206, z=61.146) mm from the robot's reference point P:
+#   the centre of the wheel-contact circle, on the floor. (The CAD assembly frame
+#   reports the CoG at y = 34.729 mm, which puts P at y = 24.523 mm there: inferred
+#   from the two values, not read from CAD.)
+# Body axes: x right, y forward (front wheels at +y), z up. CAD x/y are ASSUMED
+# to be the same axes.
 #
-# I_zz = I_zz(CoG) + M * (x_cog^2 + y_cog^2)     -- parallel axis theorem,
-# shifting from the CoG to whatever point is used as the robot's rotation
-# origin.
+# The planar state tracks P, not the CoG, so the plant uses the full planar mass
+# matrix about P (off-diagonal -m*c_y, m*c_x). Its yaw entry is I_zz about P:
+# I_zz = I_zz(CoG) + M * (x_cog^2 + y_cog^2)     -- parallel axis theorem.
 # ---------------------------------------------------------------------------
 
 IZZ_COG_KG_MM2 = 7443.681          # kg*mm^2
-COG_X_MM, COG_Y_MM = 0.597, 10.206 #mm
+IXX_COG_KG_MM2 = 6398.534          # kg*mm^2, roll/pitch: about body x through the CoG
+IYY_COG_KG_MM2 = 6120.905          # kg*mm^2, about body y through the CoG
+COG_X_MM, COG_Y_MM = 0.597, 10.206 #mm, from P
+COG_Z_MM = 61.146                  # mm, CoG height above the floor (h)
 
-ROBOT_INERTIA = (IZZ_COG_KG_MM2 + ROBOT_MASS * (COG_X_MM**2 + COG_Y_MM**2))*1e-6 # 7725.673 kg mm^2 = 0.007725673 kgm^2
+
+
+def set_center_of_gravity(x_mm=COG_X_MM, y_mm=COG_Y_MM, z_mm=COG_Z_MM):
+    """Place the CoG at (x, y, z) mm from P (body axes) and update the values derived from it.
+
+    The mass distribution moves rigidly, so the inertia about the CoG stays the CAD value
+    and the yaw inertia about P follows from the parallel-axis theorem. With (0, 0, h) the
+    mass is centred: ROBOT_INERTIA = I_zz(CoG) and the planar mass matrix is diagonal.
+    Plants read these values when they are built, so call this before building one.
+    """
+    global COG_OFFSET, COG_HEIGHT, ROBOT_INERTIA
+    COG_OFFSET = np.array([x_mm, y_mm], dtype=float) * 1e-3   # [m] CoG from P, body axes
+    COG_HEIGHT = z_mm * 1e-3                                   # [m]
+    ROBOT_INERTIA = (IZZ_COG_KG_MM2 + ROBOT_MASS * (x_mm**2 + y_mm**2)) * 1e-6  # [kg m^2] about P
+
+
+set_center_of_gravity()  # CAD position: ROBOT_INERTIA = 7725.673 kg mm^2 = 0.007725673 kg m^2
 # constant robot inertia cause the robot does not change shape
+ROBOT_INERTIA_XX = IXX_COG_KG_MM2 * 1e-6              # [kg m^2] about the CoG
+ROBOT_INERTIA_YY = IYY_COG_KG_MM2 * 1e-6              # [kg m^2] about the CoG
+
+# Wheel-ground contact compliance (X-ring rollers on the field surface), used by the
+# "dynamic" chassis load model. Both UNMEASURED; treat as sensitivity parameters.
+#   Stiffness from an ASSUMED static deflection of 0.3 mm under the nominal wheel load
+#   (chassis_load_transfer_plan.md, section 5): k = (m g / 4) / 0.3 mm ~ 2.2e4 N/m.
+#   Damping from an ASSUMED heave damping ratio zeta: per contact c = zeta * sqrt(k m),
+#   which gives zeta for the heave mode of all four contacts (4k, 4c, m).
+CONTACT_STATIC_DEFLECTION = 0.3e-3       # [m]   ASSUMED
+CONTACT_DAMPING_RATIO = 0.2              # [-]   ASSUMED
+CONTACT_STIFFNESS = (ROBOT_MASS * GRAVITY / N_WHEELS) / CONTACT_STATIC_DEFLECTION   # [N/m]
+CONTACT_DAMPING = CONTACT_DAMPING_RATIO * np.sqrt(CONTACT_STIFFNESS * ROBOT_MASS)    # [N s/m]
 
 # ---------------------------------------------------------------------------
 # Geometry

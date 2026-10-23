@@ -1,6 +1,6 @@
 # Chassis load transfer, pitch, and roll: research and plan
 
-**Status (2026-10-23):** research only, nothing implemented. Branch `chassis-load-transfer`. Target model: `robot_model_voltage.ipynb`.
+**Status (2026-10-23, later):** Levels 1 and 2 implemented in both notebooks behind `CHASSIS_LOAD_MODEL` (`"equal"`, `"quasi_static"`, `"dynamic"`; default `"dynamic"`), with the full planar mass matrix for the CoG offset. Checks in section 4.6; results in section 6 below. Branch `chassis-load-transfer`.
 
 ## 1. Why: the model cannot slip in the drive direction
 
@@ -78,3 +78,47 @@ with signs to be fixed against the body axes (x right, y forward, z up) during i
 - "Application of Kalker theory of rolling contact for dynamic simulation of mobile robots," arXiv:2011.01066.
 - Duda, S. et al., "Determination of the kinematic excitation originating from the irregular envelope of an omnidirectional wheel," Sensors 21 (2021) 6931.
 - Vehicle load-distribution background: ScienceDirect topic overview "Independent suspension"; IntechOpen chapter on long combination vehicle stability.
+
+## 6. Implementation and results (2026-10-23)
+
+**Answers to section 5.**
+- Q1: CAD gives $I_{xx}$ = 6398.534 and $I_{yy}$ = 6120.905 kg·mm², about the CoG; $h$ = 61.146 mm. The CoG is at (0.597, 10.206) mm from the robot centre P: the CAD origin is on the ground, centred in x, and P is at y = 24.523 mm from it (Henry's sketch). The tensor is about the CoG, not the CAD origin: about the origin, $L_{xx}$ would be at least $m(y^2+z^2)$ = 13,341 kg·mm², but CAD reports 6,398.
+- Q2: no measurement is possible. Assumed 0.3 mm static deflection ($k$ = 2.2e4 N/m) and heave damping ratio 0.2 (`robot_constants.py`).
+- Q3: both levels, behind one switch, so they can be compared.
+
+**Changes.**
+- Full planar mass matrix about P, with the CoG offset c: $M_b$ = [[m, 0, −m c_y], [0, m, m c_x], [−m c_y, m c_x, I_P]], and the matching velocity terms. $I_P$ = `ROBOT_INERTIA` (parallel axis), unchanged.
+- `"quasi_static"`: loads and contact forces solved together by fixed-point iteration inside every dynamics evaluation (not the one-step lag).
+- `"dynamic"`: six states [z, pitch, roll, rates] appended after all other states (indices 14–19 in the current plant, 18–23 in the voltage plant). Unilateral spring-damper contacts, optional roller-envelope excitation (`ENABLE_WHEEL_ENVELOPE`, off by default).
+- Energy-balance checks in sections 4.1/4.5 now use the full mass matrix with `load_model="equal"`.
+
+**Results (section 4.6, voltage plant).**
+- Regression: with c = 0 and `"equal"`, the patched plant reproduces the old one exactly (difference 0.0) in both motor modes.
+- Static loads are strongly unequal: front 9.23 / 9.09 N, rear 4.02 / 4.13 N. The front contacts are at y = +39.7 mm and the rear at −56.2 mm, and the CoG is 10.2 mm ahead of P. The rear grip limit at rest (0.9 × 4.0 = 3.6 N) is below the motor's 4.43 N.
+- Free spin with friction off: the CoG moves on a straight line (error 4e-14 m) while P circles it at |c| = 10.2 mm, confirming the mass matrix.
+- Rest: no attitude drift (7e-14). Equilibrium pitch −0.14 deg (nose down).
+- Hard forward step (3 m/s request, current-limited): `"equal"` and `"quasi_static"` do not slide (max 71% and 81% of grip). `"dynamic"` slides on all four wheels from t = 0.02 s and keeps sliding (wheelspin): the current reaches the limit in under 1 ms, but load moves to the rear only as fast as the chassis pitches (~5 ms), and once sliding, μ_k N ≈ 3 N < 4.43 N.
+- That outcome depends on the assumed contact damping, not the stiffness: wheelspin for ζ ≤ 0.5, no slide at ζ = 1.0, for deflections 0.1–1.0 mm.
+- Timestep convergence (DT vs DT/2) through the hard step: 0.03 mm. Drop test from 1 mm: 9 ms airborne, re-contact, settles. Envelope on at 1 m/s: load ripple about 2.4–2.7 N peak to peak.
+
+**Open.**
+- Contact damping ratio: it decides whether a current step spins the wheels. Pick a value, or keep 0.2 as a stress case for the controllers.
+- Does CAD +y point to the front (dribbler side)? Assumed.
+- The rear wheels' grip at rest (3.6 N) is below the motor force, so a rear wheel can spin at standstill under full current if load has not yet transferred.
+
+## 7. Tabled (2026-10-23): status and how to continue
+
+Henry tabled the dynamic model to work on `main`. The static, CoG-based wheel loads (and the Level 1 load transfer) move to `main` behind a switch, because the uneven loading alone may decide whether the robot slips. This branch keeps the dynamic (Level 2) model.
+
+**Where it stopped.**
+- Both notebooks on this branch contain the full mass matrix, `CHASSIS_LOAD_MODEL` (`"equal"`, `"quasi_static"`, `"dynamic"`) and section 4.6. They are **not verified**. The voltage-notebook run stopped at the first sanity check (`plantv04`): with `"dynamic"`, a 1e6 rad/s request on every wheel blows up on the third step (currents ~1e5 A, pitch ~80 rad).
+- Diagnosis so far: the equations are not unstable at the state before the blow-up (largest Jacobian eigenvalue +0.19 1/s). Radau (max step 1e-3 or 1e-4) and LSODA exceed 200,000 function calls on that step. BDF integrates the same step in 1.3 s with sensible results. The trigger is the rear wheels sliding (static rear load ~4 N, grip 3.6 N < motor force 4.43 N) while the contact loads oscillate.
+- Section 4.6 passed in a scratch run before the notebooks were patched (results in section 6). The robot_model_current notebook has not been run.
+
+**How to continue (in order).**
+1. Rebase this branch onto `main` once `main` has the load switch, so the shared code (mass matrix, CoG settings, load functions) exists once.
+2. Integrator: test BDF as `PLANT_INTEGRATOR` for the dynamic model against Radau on the open-loop suite (results and run time). If BDF is not enough, find the stiff term at the slide onset: the K_SMOOTH_D slope of the sliding law times the oscillating load, or the grip/slide switching inside the dynamics.
+3. Re-run the sanity checks, then both notebooks top to bottom, one at a time.
+4. Decide the contact damping ratio. It decides whether a hard current step spins the wheels (section 6).
+5. Confirm with CAD: the wheel angles (front 30 deg, rear 45 deg, all on r = 79.485 mm) and that CAD +y points to the front. The static load split depends directly on both.
+6. Then plan step 2: move the vibration from the friction coefficient onto the normal load via the roller envelope, and retire `ENABLE_FRICTION_VIBRATION`.

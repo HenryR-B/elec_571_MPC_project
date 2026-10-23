@@ -81,8 +81,8 @@ K_SMOOTH_D = 200.0
 F_ROLL_LIMIT = MU_D_STAT * F_N
 
 
-MU_A_STAT = 0.3   # TBD: measure via tilt test (wheels perpendicular)
-MU_A_DYN = 0.324 # calculated as increase because bushings will be forced to move at a faster rate than they can without a driving force, increasing friction
+MU_A_STAT = 0.2   # TBD: measure via tilt test (wheels perpendicular)
+MU_A_DYN = 0.322 # calculated as increase because bushings will be forced to move at a faster rate than they can without a driving force, increasing friction
 ALPHA_A = 1 # relatively slow transition from rolling to slipping
 K_SMOOTH_A = 200
 

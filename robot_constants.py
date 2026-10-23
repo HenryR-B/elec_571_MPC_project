@@ -104,3 +104,14 @@ K_SMOOTH_A = 200
 
 
 
+
+# Wheel losses (rolling resistance + bearing drag). Torque on each wheel:
+#   tau_loss = -C_rr * N * R_w * tanh(theta_dot / w_eps) - b_w * theta_dot
+# These are the only losses that act on pure yaw: for pure spin the axial
+# (roller) slip is zero because each axle points at the robot centre.
+# UNMEASURED. Identify both from a yaw coast-down test (spin in place, set
+# Iq = 0, track yaw rate): linear decay -> C_rr, exponential decay -> b_w.
+# With both at 0 the plant is lossless in yaw and coasts forever.
+WHEEL_ROLLING_RESISTANCE_COEFF = 0.0   # C_rr [-]            UNMEASURED
+WHEEL_BEARING_VISCOUS_DRAG = 0.0       # b_w [N m s/rad]     UNMEASURED
+WHEEL_LOSS_SMOOTHING_SPEED = 0.5       # w_eps [rad/s], numerical regularization of sign(theta_dot)

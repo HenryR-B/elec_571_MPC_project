@@ -67,8 +67,9 @@ IQ_LIMIT = 5.0  # [A]
 MOTOR_KV = 360
 MOTOR_KT = 60 / (2 * np.pi * MOTOR_KV)
 
-MOTOR_RESISTANCE = 0.24
-MOTOR_INDUCTANCE = 0.133e-3
+MOTOR_RESISTANCE = 0.24 # Ohms
+MOTOR_INDUCTANCE = 0.133e-3 # H
+MAX_MOTOR_VOLTAGE = 16.8 # V
 
 # Wheel Roller Friction
 MU_D_STAT = 0.9   # TBD: measure via tilt test (wheels aligned, common direction)

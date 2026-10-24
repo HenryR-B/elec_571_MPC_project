@@ -48,6 +48,10 @@ def set_center_of_gravity(x_mm=COG_X_MM, y_mm=COG_Y_MM, z_mm=COG_Z_MM):
 
 
 set_center_of_gravity()  # CAD position: ROBOT_INERTIA = 7725.673 kg mm^2 = 0.007725673 kg m^2
+# REAL SYSTEM VALUES: the CAD numbers above (CoG 0.597, 10.206, 61.146 mm from P;
+# I_zz(CoG) = 7443.681 kg mm^2). The notebooks use them by default (COG_POSITION_MM in
+# their configuration cell). Dana's simplification, (0, 0, h), centres the CoG in x and y,
+# which gives ROBOT_INERTIA = I_zz(CoG) = 7443.681 kg mm^2 and a diagonal mass matrix.
 # constant robot inertia cause the robot does not change shape
 ROBOT_INERTIA_XX = IXX_COG_KG_MM2 * 1e-6              # [kg m^2] about the CoG
 ROBOT_INERTIA_YY = IYY_COG_KG_MM2 * 1e-6              # [kg m^2] about the CoG
@@ -80,6 +84,13 @@ WHEEL_ALPHA_DEG = [
     180.0 + 45.0,
     360.0 - 45.0
 ]
+# WHEEL_ALPHA_DEG sets each wheel's axle direction (CCW from +x); its drive direction is
+# the axle turned +90 deg. WHEEL_POSITION_DEG sets where each wheel's contact point sits
+# on the circle of radius WHEEL_ROBOT_DIST. Tangential wheels (the real robot): the two
+# arrays are identical, the axle points at the centre, and every yaw lever r_i x d_i = L.
+# Different values make a wheel non-tangential: e.g. a wheel at position 30 deg with
+# alpha 45 deg drives along the 45-deg wheel's direction from the 30-deg spot.
+WHEEL_POSITION_DEG = list(WHEEL_ALPHA_DEG)
 
 # Wheel
 F_N = (ROBOT_MASS * GRAVITY / N_WHEELS)
@@ -174,11 +185,17 @@ WHEEL_LOSS_SMOOTHING_SPEED = 0.5       # w_eps [rad/s], numerical regularization
 
 
 # ---------------------------------------------------------------------------
-# Friction disturbance parameters (ESTIMATED surrogates, not measured). The on/off
-# switches are in the notebooks' configuration cell. Multiplier on each wheel's friction:
-#   f_i = clip(1 + b_i + a_i n_i, SCALE_MIN, SCALE_MAX),  n_i correlated noise in [-1, 1]
-#   a_i = min(MAX, BASE + kappa (eps/2) (N_ROLLERS |v_i| / R_w)^2 / g
-#                  + ACCEL_GAIN |theta_ddot_i| / REF_ACCEL + SLIP_GAIN min(1, |slip_i| / REF_SLIP))
+# Disturbance parameters (ESTIMATED surrogates, not measured). The on/off switches are in
+# the notebooks' configuration cell.
+#   Friction offset (surface): each wheel's friction coefficients are scaled by
+#     f_i = clip(1 + b_i, FRICTION_SCALE_MIN, FRICTION_SCALE_MAX), b_i ~ N(0, FRICTION_OFFSET_STD),
+#     fixed for the run.
+#   Load vibration (wheel geometry and motion): each wheel's normal load is scaled by
+#     g_i = 1 + a_i n_i (n_i correlated noise in [-1, 1]), then the four are rescaled to sum to m g:
+#     a_i = min(MAX, BASE + kappa (eps/2) (N_ROLLERS |v_i| / R_w)^2 / g
+#                    + ACCEL_GAIN |theta_ddot_i| / REF_ACCEL + SLIP_GAIN min(1, |slip_i| / REF_SLIP))
+#     The geometric term is the vertical acceleration of an axle following the roller
+#     envelope, as a fraction of g: the relative load change it causes.
 # ---------------------------------------------------------------------------
 # Envelope out-of-roundness eps (peak-to-peak axle height change while rolling).
 # Duda et al. 2021 (Sensors 21:6931) measured ~0.05 mm on a 125 mm double-row
@@ -186,15 +203,15 @@ WHEEL_LOSS_SMOOTHING_SPEED = 0.5       # w_eps [rad/s], numerical regularization
 # A single-row gap estimate for our wheel, ROLLER_GAP^2 / (8 R_w) = 0.28 mm, is an upper
 # bound; double rows fill each other's gaps. 0 = perfectly round wheel.
 WHEEL_ENVELOPE_IRREGULARITY = 0.05e-3   # eps [m]                          ESTIMATED (Duda 2021)
-FRICTION_VIBRATION_COMPLIANCE = 0.3     # kappa: share of the rigid-axle acceleration that
+LOAD_VIBRATION_COMPLIANCE = 0.3     # kappa: share of the rigid-axle acceleration that
                                         # reaches the contact (X-ring compliance)  ESTIMATED
-FRICTION_VIBRATION_BASE = 0.02          # spread at rest                   ESTIMATED
-FRICTION_VIBRATION_ACCEL_GAIN = 0.10    # spread at REF_ACCEL              ESTIMATED
-FRICTION_VIBRATION_REF_ACCEL = 100.0    # [rad/s^2]
-FRICTION_VIBRATION_SLIP_GAIN = 0.10     # extra spread at REF_SLIP         ESTIMATED
-FRICTION_VIBRATION_REF_SLIP = 0.5       # [m/s]
-FRICTION_VIBRATION_MAX = 0.5            # cap on a_i
-FRICTION_VIBRATION_CORRELATION_TIME = 0.02  # [s]
+LOAD_VIBRATION_BASE = 0.02          # spread at rest                   ESTIMATED
+LOAD_VIBRATION_ACCEL_GAIN = 0.10    # spread at REF_ACCEL              ESTIMATED
+LOAD_VIBRATION_REF_ACCEL = 100.0    # [rad/s^2]
+LOAD_VIBRATION_SLIP_GAIN = 0.10     # extra spread at REF_SLIP         ESTIMATED
+LOAD_VIBRATION_REF_SLIP = 0.5       # [m/s]
+LOAD_VIBRATION_MAX = 0.5           # cap on a_i (< 1 keeps every load positive)
+LOAD_VIBRATION_CORRELATION_TIME = 0.02  # [s]
 FRICTION_OFFSET_STD = 0.05              # fixed per-wheel spread (Dana's FRICTION_NOISE_STD)
 FRICTION_SCALE_MIN = 0.2                # clip on f_i
 FRICTION_SCALE_MAX = 1.8

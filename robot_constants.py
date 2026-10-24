@@ -185,11 +185,17 @@ WHEEL_LOSS_SMOOTHING_SPEED = 0.5       # w_eps [rad/s], numerical regularization
 
 
 # ---------------------------------------------------------------------------
-# Friction disturbance parameters (ESTIMATED surrogates, not measured). The on/off
-# switches are in the notebooks' configuration cell. Multiplier on each wheel's friction:
-#   f_i = clip(1 + b_i + a_i n_i, SCALE_MIN, SCALE_MAX),  n_i correlated noise in [-1, 1]
-#   a_i = min(MAX, BASE + kappa (eps/2) (N_ROLLERS |v_i| / R_w)^2 / g
-#                  + ACCEL_GAIN |theta_ddot_i| / REF_ACCEL + SLIP_GAIN min(1, |slip_i| / REF_SLIP))
+# Disturbance parameters (ESTIMATED surrogates, not measured). The on/off switches are in
+# the notebooks' configuration cell.
+#   Friction offset (surface): each wheel's friction coefficients are scaled by
+#     f_i = clip(1 + b_i, FRICTION_SCALE_MIN, FRICTION_SCALE_MAX), b_i ~ N(0, FRICTION_OFFSET_STD),
+#     fixed for the run.
+#   Load vibration (wheel geometry and motion): each wheel's normal load is scaled by
+#     g_i = 1 + a_i n_i (n_i correlated noise in [-1, 1]), then the four are rescaled to sum to m g:
+#     a_i = min(MAX, BASE + kappa (eps/2) (N_ROLLERS |v_i| / R_w)^2 / g
+#                    + ACCEL_GAIN |theta_ddot_i| / REF_ACCEL + SLIP_GAIN min(1, |slip_i| / REF_SLIP))
+#     The geometric term is the vertical acceleration of an axle following the roller
+#     envelope, as a fraction of g: the relative load change it causes.
 # ---------------------------------------------------------------------------
 # Envelope out-of-roundness eps (peak-to-peak axle height change while rolling).
 # Duda et al. 2021 (Sensors 21:6931) measured ~0.05 mm on a 125 mm double-row
@@ -197,15 +203,15 @@ WHEEL_LOSS_SMOOTHING_SPEED = 0.5       # w_eps [rad/s], numerical regularization
 # A single-row gap estimate for our wheel, ROLLER_GAP^2 / (8 R_w) = 0.28 mm, is an upper
 # bound; double rows fill each other's gaps. 0 = perfectly round wheel.
 WHEEL_ENVELOPE_IRREGULARITY = 0.05e-3   # eps [m]                          ESTIMATED (Duda 2021)
-FRICTION_VIBRATION_COMPLIANCE = 0.3     # kappa: share of the rigid-axle acceleration that
+LOAD_VIBRATION_COMPLIANCE = 0.3     # kappa: share of the rigid-axle acceleration that
                                         # reaches the contact (X-ring compliance)  ESTIMATED
-FRICTION_VIBRATION_BASE = 0.02          # spread at rest                   ESTIMATED
-FRICTION_VIBRATION_ACCEL_GAIN = 0.10    # spread at REF_ACCEL              ESTIMATED
-FRICTION_VIBRATION_REF_ACCEL = 100.0    # [rad/s^2]
-FRICTION_VIBRATION_SLIP_GAIN = 0.10     # extra spread at REF_SLIP         ESTIMATED
-FRICTION_VIBRATION_REF_SLIP = 0.5       # [m/s]
-FRICTION_VIBRATION_MAX = 0.5            # cap on a_i
-FRICTION_VIBRATION_CORRELATION_TIME = 0.02  # [s]
+LOAD_VIBRATION_BASE = 0.02          # spread at rest                   ESTIMATED
+LOAD_VIBRATION_ACCEL_GAIN = 0.10    # spread at REF_ACCEL              ESTIMATED
+LOAD_VIBRATION_REF_ACCEL = 100.0    # [rad/s^2]
+LOAD_VIBRATION_SLIP_GAIN = 0.10     # extra spread at REF_SLIP         ESTIMATED
+LOAD_VIBRATION_REF_SLIP = 0.5       # [m/s]
+LOAD_VIBRATION_MAX = 0.5           # cap on a_i (< 1 keeps every load positive)
+LOAD_VIBRATION_CORRELATION_TIME = 0.02  # [s]
 FRICTION_OFFSET_STD = 0.05              # fixed per-wheel spread (Dana's FRICTION_NOISE_STD)
 FRICTION_SCALE_MIN = 0.2                # clip on f_i
 FRICTION_SCALE_MAX = 1.8

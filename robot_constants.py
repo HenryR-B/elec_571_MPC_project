@@ -126,6 +126,15 @@ MU_D_STAT = 0.9   # TBD: measure via tilt test (wheels aligned, common direction
 MU_D_DYN = 0.422 # dynamic friction coefficient, assumed based on lower than the calculated slip at 2.5m/s => 0.422
 ALPHA_D = 10 # relatively fast transition from rolling to slipping due to motor torque
 K_SMOOTH_D = 200.0 
+# Sliding drive friction, "continuous" law in the notebooks (DRIVE_SLIDING_LAW):
+#   F_d = -N mu_d(|v|) tanh(v / DRIVE_SLIP_REGULARIZATION)
+# A numerical smoothing of sign(v), not a measured value: the force reaches mu_d,s N within a
+# few mm/s of slip, so a wheel that breaks away keeps the force it had.
+DRIVE_SLIP_REGULARIZATION = 1.0e-3  # [m/s]
+# Karnopp breakaway band: a wheel that breaks loose with |v_d| below this keeps mu_d(|v|) N in the
+# direction of the force it needed (the slip law is zero at zero slip). 5 x the regularisation, so
+# the slip law has reached 99.99% of mu_d N at the band edge and the two agree there.
+DRIVE_BREAKAWAY_BAND = 5.0 * DRIVE_SLIP_REGULARIZATION  # [m/s]
 
 # F_N is the nominal normal load on one wheel. MU_D_STAT * F_N is the
 # corresponding per-wheel drive-traction threshold for equal load sharing.

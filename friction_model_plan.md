@@ -1,6 +1,9 @@
 # Drive-axis friction model: current state and LuGre plan
 
-Status: plan only. The model on `main` at commit `aac68af` is the switch model described in section 1. Nothing in section 4 is implemented yet.
+Status (2026-10-24):
+- The speed-ups in section 5 are applied.
+- LuGre is implemented as `DRIVE_SLIDING_LAW = "lugre"`, with section 4.15 comparing it with the switch model. Results are in section 6.
+- The default law is still `"switch"`.
 
 Scope: the drive (d) axis friction between each omni wheel and the floor in `robot_model_current.ipynb` and `robot_model_voltage.ipynb`. The roller (a) axis friction is unchanged throughout.
 
@@ -197,7 +200,14 @@ Main risk: **sigma1 overshoot at fast breakaway** and **presliding drift**. Both
 
 ---
 
-## 5. Other pending work (written, not tested; scripts in `pending_patches/`)
+## 5. Speed-ups and other patches (scripts in `pending_patches/`)
+
+Applied on 2026-10-24 (commit `fc67351`):
+- **A:** results identical bit for bit, 1.5x faster.
+- **B:** at rtol 1e-5, 2.1x faster in total on the current plant and 3.0x on the voltage plant, and closer to a 1e-8 reference than before.
+- **Tolerances:** rtol 1e-4 and 1e-3 gave no further speed (one solver step per 1 ms is already the cap), so the tolerance stays at 1e-5.
+
+The descriptions below are from before they were applied.
 
 - **`patch_speed_a.py`**: removes repeated work with identical results expected:
   - cached wheel geometry;
@@ -220,3 +230,73 @@ Suggested order:
 3. LuGre as `"lugre"`, then the comparisons in 4.5.
 4. Decide the default law.
 5. Port to `chassis-load-transfer`.
+
+---
+
+## 6. Results: LuGre vs the switch model (section 4.15, 2026-10-24)
+
+Setup:
+- Current model, real CoG, `"static"` loads, 1 ms step, no disturbances, open loop.
+- LuGre with presliding deflection 0.5 mm, damping ratio 1, sigma2 = 0.
+- Three models: **switch** (default, with the 33 ms blend), **switch, no blend** (plain static/kinetic Coulomb-Stribeck), and **lugre**.
+- Figures and printed output: `Figures/notebooks/current_model/2026-10-24_LuGre-vs-switch-section-4.15/`.
+
+### 6.1 Friction level: LuGre computes the friction we expect
+In steady sliding (slip above 20 mm/s, one way, for 0.1 s), the error against the Stribeck curve `mu_d(|v|) N` is:
+
+| Model | Median | 95th percentile |
+|---|---|---|
+| LuGre | 0.00-0.03% of mu_s N | 0.02-1.7% |
+| Switch, no blend | 0.00% | 0.00% |
+| Switch with blend | 0.00-0.17% | up to 1.7% |
+
+The F/N against slip plot shows why the blended switch strays: during the 33 ms blend after each breakaway it sits **above** the curve, up to mu_s at slips of 1-2 m/s. LuGre and the no-blend switch both stay on the curve. **The model that departs from Coulomb-Stribeck friction is the blend, not LuGre.**
+
+### 6.2 Breakaway: LuGre breaks loose below mu_s N under fast loading
+The bristles need slip to deflect, and while the wheel slips the Stribeck curve has already dropped. Peak force as a fraction of mu_s N:
+
+| Scenario | LuGre |
+|---|---|
+| Slow ramp | 0.957 |
+| Sideways | 0.875 |
+| At speed | 0.887 |
+| Fast reversals | **1.076** |
+
+The reversal overshoot comes from the sigma1 dz/dt term. This is LuGre's known rate-dependent breakaway. It approaches mu_s N as the presliding deflection shrinks: 0.967 at 0.05 mm.
+
+### 6.3 Robot level: LuGre matches the plain Coulomb-Stribeck model
+End-of-run difference, LuGre against each switch variant:
+
+| Scenario | LuGre vs switch, no blend | LuGre vs switch with blend |
+|---|---|---|
+| Fast reversals | 1 mm, -0.1 deg | 9 mm, -0.5 deg |
+| Sideways 2 m/s, then stop | 0 mm, +0.2 deg (of a -671 deg spin) | 23 mm, -17 deg |
+| Slow current ramp | 326 mm, +3.3 deg | 970 mm, +11 deg |
+| Transitions at speed | 422 mm, +15 deg | 1862 mm, -25 deg |
+
+The blend reduces sliding and yaw (peak yaw at speed: 1.27 rad/s with the blend, 3.59 without, 4.72 with LuGre).
+
+### 6.4 Sensitivity to the unmeasured bristle parameters (transitions at speed)
+- **Presliding deflection matters.**
+  - At 0.05-0.1 mm, LuGre's slip and yaw traces lie almost on the no-blend switch model. So LuGre converges to Coulomb-Stribeck as the bristles stiffen.
+  - At 0.5-2 mm, the second breakaway slides much longer: back-left slip reaches about 1.9 m/s instead of 1.0 m/s.
+- **The damping ratio (0.5-2) barely matters.**
+
+### 6.5 Solver
+| | Switch | LuGre |
+|---|---|---|
+| Typical step | 15 evaluations | 15 evaluations |
+| Worst step | 155-1102 evaluations | 58-219 evaluations |
+| Wall time | about the same | about the same |
+
+LuGre has no switching spikes.
+
+### 6.6 What this means
+1. LuGre does **not** compute friction differently from our static/kinetic model where it matters: sliding follows the same curve, and with stiff bristles the robot moves like the plain switch model.
+2. The real modelling choice is **how breakaway and re-grip happen**:
+   - instant (the switch model);
+   - delayed by the 33 ms blend, an assumption with no physical parameter;
+   - set by a presliding deflection (LuGre), a physical quantity that could be measured.
+3. **Open questions:**
+   - Which default to use: "switch" with the blend, "switch" with no blend, or "lugre"?
+   - What presliding deflection? A measurement would settle the at-speed differences in 6.4. Until then, 0.05-0.1 mm keeps LuGre close to the Coulomb-Stribeck model, at slightly more solver effort (max 115-143 evaluations per step instead of 63).

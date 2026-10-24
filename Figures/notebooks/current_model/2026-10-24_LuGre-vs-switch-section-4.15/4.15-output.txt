@@ -1,0 +1,38 @@
+===== lugre02
+LuGre vs switch, with and without the blend (rear wheels; force as a fraction of mu_s N; reported, not asserted):
+  slow current ramp (4.12):
+    switch          : peak force 1.000; rear sliding time [1.335 1.121] s; peak |yaw rate| 1.35 rad/s; end pose x -1.359 m, y +5.948 m, heading +11.3 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 0.32% (2229 samples); peak |z| 0.00 mm; solver evaluations per step median 15, max 325; run 21 s
+    switch, no blend: peak force 1.000; rear sliding time [1.336 1.113] s; peak |yaw rate| 1.47 rad/s; end pose x -1.925 m, y +5.624 m, heading +19.1 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 0.00% (2232 samples); peak |z| 0.00 mm; solver evaluations per step median 15, max 155; run 20 s
+    lugre           : peak force 0.957; rear sliding time [1.424 1.211] s; peak |yaw rate| 1.44 rad/s; end pose x -2.153 m, y +5.391 m, heading +22.4 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 0.02% (2358 samples); peak |z| 0.48 mm; solver evaluations per step median 15, max 72; run 20 s
+    lugre vs switch at the end: position 970 mm, heading +11.1 deg
+    lugre vs switch, no blend at the end: position 326 mm, heading +3.3 deg
+  fast reversals (4.12):
+    switch          : peak force 1.000; rear sliding time [1.208 1.208] s; peak |yaw rate| 0.04 rad/s; end pose x +0.001 m, y +0.033 m, heading +1.0 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 1.36% (808 samples); peak |z| 0.00 mm; solver evaluations per step median 15, max 1102; run 15 s
+    switch, no blend: peak force 1.000; rear sliding time [1.208 1.208] s; peak |yaw rate| 0.03 rad/s; end pose x +0.000 m, y +0.024 m, heading +0.6 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 0.00% (800 samples); peak |z| 0.00 mm; solver evaluations per step median 15, max 669; run 13 s
+    lugre           : peak force 1.076; rear sliding time [1.16 1.16] s; peak |yaw rate| 0.03 rad/s; end pose x +0.000 m, y +0.023 m, heading +0.5 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 1.71% (814 samples); peak |z| 0.31 mm; solver evaluations per step median 15, max 219; run 12 s
+    lugre vs switch at the end: position 9 mm, heading -0.5 deg
+    lugre vs switch, no blend at the end: position 1 mm, heading -0.1 deg
+  sideways 2 m/s, then stop (4.13):
+    switch          : peak force 1.000; rear sliding time [1.12  1.124] s; peak |yaw rate| 14.86 rad/s; end pose x +0.070 m, y -0.049 m, heading -653.9 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 0.53% (2042 samples); peak |z| 0.00 mm; solver evaluations per step median 15, max 356; run 15 s
+    switch, no blend: peak force 1.000; rear sliding time [1.119 1.124] s; peak |yaw rate| 14.99 rad/s; end pose x +0.049 m, y -0.059 m, heading -671.3 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 0.00% (2041 samples); peak |z| 0.00 mm; solver evaluations per step median 15, max 218; run 14 s
+    lugre           : peak force 0.875; rear sliding time [1.107 1.111] s; peak |yaw rate| 15.00 rad/s; end pose x +0.049 m, y -0.058 m, heading -671.1 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 0.26% (2039 samples); peak |z| 0.39 mm; solver evaluations per step median 15, max 109; run 14 s
+    lugre vs switch at the end: position 23 mm, heading -17.2 deg
+    lugre vs switch, no blend at the end: position 0 mm, heading +0.2 deg
+  transitions at speed (4.14):
+    switch          : peak force 1.000; rear sliding time [0.446 0.553] s; peak |yaw rate| 1.27 rad/s; end pose x +0.917 m, y +4.399 m, heading -5.7 deg; steady-sliding error vs the Stribeck curve median 0.17%, 95th percentile 1.67% (572 samples); peak |z| 0.00 mm; solver evaluations per step median 15, max 340; run 18 s
+    switch, no blend: peak force 1.000; rear sliding time [0.5   0.626] s; peak |yaw rate| 3.59 rad/s; end pose x +2.423 m, y +3.552 m, heading -45.8 deg; steady-sliding error vs the Stribeck curve median 0.00%, 95th percentile 0.00% (708 samples); peak |z| 0.00 mm; solver evaluations per step median 15, max 198; run 17 s
+    lugre           : peak force 0.887; rear sliding time [0.999 0.943] s; peak |yaw rate| 4.72 rad/s; end pose x +2.297 m, y +3.150 m, heading -30.5 deg; steady-sliding error vs the Stribeck curve median 0.03%, 95th percentile 0.83% (1617 samples); peak |z| 0.44 mm; solver evaluations per step median 15, max 63; run 18 s
+    lugre vs switch at the end: position 1862 mm, heading -24.8 deg
+    lugre vs switch, no blend at the end: position 422 mm, heading +15.3 deg
+Sensitivity, transitions at speed:
+  switch: rear sliding time [0.446 0.553] s, peak |yaw rate| 1.27 rad/s
+  switch, no blend: rear sliding time [0.5   0.626] s, peak |yaw rate| 3.59 rad/s
+  lugre, presliding 0.05 mm, damping ratio 1.0: peak force 0.967 of mu_s N, rear sliding time [0.507 0.838] s, peak |yaw rate| 3.97 rad/s; end vs switch: position 2367 mm, heading -58.8 deg; vs switch, no blend: position 690 mm, heading -18.7 deg; solver evaluations per step median 15, max 143; run 21 s
+  lugre, presliding 0.10 mm, damping ratio 1.0: peak force 0.953 of mu_s N, rear sliding time [0.528 0.881] s, peak |yaw rate| 4.13 rad/s; end vs switch: position 2390 mm, heading -59.2 deg; vs switch, no blend: position 727 mm, heading -19.1 deg; solver evaluations per step median 15, max 115; run 20 s
+  lugre, presliding 0.50 mm, damping ratio 1.0: peak force 0.887 of mu_s N, rear sliding time [0.999 0.943] s, peak |yaw rate| 4.72 rad/s; end vs switch: position 1862 mm, heading -24.8 deg; vs switch, no blend: position 422 mm, heading +15.3 deg; solver evaluations per step median 15, max 63; run 18 s
+  lugre, presliding 2.00 mm, damping ratio 1.0: peak force 0.852 of mu_s N, rear sliding time [0.979 0.916] s, peak |yaw rate| 5.53 rad/s; end vs switch: position 2210 mm, heading -32.3 deg; vs switch, no blend: position 695 mm, heading +7.8 deg; solver evaluations per step median 15, max 60; run 17 s
+  lugre, presliding 0.50 mm, damping ratio 0.5: peak force 0.888 of mu_s N, rear sliding time [1.004 0.964] s, peak |yaw rate| 4.53 rad/s; end vs switch: position 1763 mm, heading -22.8 deg; vs switch, no blend: position 371 mm, heading +17.3 deg; solver evaluations per step median 15, max 58; run 18 s
+  lugre, presliding 0.50 mm, damping ratio 2.0: peak force 0.892 of mu_s N, rear sliding time [0.98  0.906] s, peak |yaw rate| 5.00 rad/s; end vs switch: position 1940 mm, heading -26.4 deg; vs switch, no blend: position 477 mm, heading +13.7 deg; solver evaluations per step median 15, max 79; run 19 s
+----- lugre02 took 298 s
+finished (exit 0); peak CPU 53.5 C
+

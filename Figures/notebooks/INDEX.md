@@ -290,3 +290,16 @@ Every plot from every committed notebook version, generated from the git history
 | 51 | 7. Run the simulation and inspect diagnostics | [Position trajectory + Position tracking error](voltage_model/2026-10-23_1900_48b4978_Dynamic-wheel-loads-heave-pitc/51_7.-Run-the-simulation-and-in__Position-trajectory-+-Position-tracking-error.png) |  |
 | 51 | 7. Run the simulation and inspect diagnostics | [Position trajectory, coloured by speed + Orientation](voltage_model/2026-10-23_1900_48b4978_Dynamic-wheel-loads-heave-pitc/51_7.-Run-the-simulation-and-in__Position-trajectory-coloured-by-speed-+-Orien.png) |  |
 
+
+## Check runs saved by hand
+
+These come from running a notebook section with `RUN_PLANT_CHECKS = True` on a copy of the notebook, not from committed notebook outputs.
+
+### 2026-10-24: 4.15 LuGre vs the switch model (current model)
+
+| section | plot |
+|---|---|
+| 4.15 LuGre vs the switch model | [Rear-left force, slip and robot motion per scenario, three friction models](current_model/2026-10-24_LuGre-vs-switch-section-4.15/4.15-LuGre-vs-switch__Rear-left-force-slip-and-robot-motion-per-scenario.png) |
+| 4.15 LuGre vs the switch model | [Friction coefficient F/N vs slip speed, against the Stribeck curve](current_model/2026-10-24_LuGre-vs-switch-section-4.15/4.15-LuGre-vs-switch__Friction-coefficient-F-over-N-vs-slip-speed.png) |
+| 4.15 LuGre vs the switch model | [Sensitivity to the presliding deflection and damping ratio](current_model/2026-10-24_LuGre-vs-switch-section-4.15/4.15-LuGre-vs-switch__Sensitivity-to-presliding-deflection-and-damping.png) |
+| 4.15 LuGre vs the switch model | [Printed output](current_model/2026-10-24_LuGre-vs-switch-section-4.15/4.15-output.txt) |

@@ -122,3 +122,18 @@ Henry tabled the dynamic model to work on `main`. The static, CoG-based wheel lo
 4. Decide the contact damping ratio. It decides whether a hard current step spins the wheels (section 6).
 5. Confirm with CAD: the wheel angles (front 30 deg, rear 45 deg, all on r = 79.485 mm) and that CAD +y points to the front. The static load split depends directly on both.
 6. Then plan step 2: move the vibration from the friction coefficient onto the normal load via the roller envelope, and retire `ENABLE_FRICTION_VIBRATION`.
+
+## 8. Resumed on main's model (2026-10-23, later)
+
+`main` now has the static and quasi-static wheel loads from the CoG (`WHEEL_LOAD_MODEL`), the full planar mass matrix, separate wheel positions and directions (`WHEEL_POSITION_DEG`, `WHEEL_ALPHA_DEG`), no wheel-angle states, the load vibration (on the normal loads), and a nominal-model PID. This branch merged `main` (taking `main`'s model files) and re-implemented the dynamic model on top as `WHEEL_LOAD_MODEL = "dynamic"` (default on this branch):
+
+- Six attitude states after all others: indices 10-15 in the current plant, 14-19 in the voltage plant (after the winding currents). Loads from unilateral spring-damper contacts, evaluated at every dynamics call; the load vibration scales them as for the other models.
+- The roller-envelope excitation is not ported: it needed the wheel-angle states, which `main` removed. The stochastic load vibration covers it for now. If the envelope comes back, it needs a roller phase integrated inside the step (about 5 rad per 10 ms step at 1 m/s).
+- The Radau blow-up from section 7 is gone: it came from the grip/slide solve releasing several wheels at once (fixed on `main`: one wheel at a time). The 1e6 rad/s sanity check passes in 2 s with the dynamic loads.
+- The energy-balance checks (sections 4.1, 4.5) run with `"quasi_static"` when the configuration is `"dynamic"`; section 4.9 checks the attitude.
+
+**Section 4.9 results (scratch run, voltage plant, CAD CoG, zeta = 0.2):** rest attitude constant to 5e-16 (equilibrium pitch -0.14 deg); timestep convergence 0.01 mm; drop from 1 mm: 9 ms airborne, settles; quasi-static loads from the dynamic run's forces within 0.30 N after 0.1 s.
+- Hard forward step: dynamic slides all four wheels (zeta = 0.2), "quasi_static" only the rear ones (its one-step lag leaves the rear at the static 4 N on the first step). zeta = 0.5: one front wheel; zeta = 1.0: nothing slides.
+- Hard sideways (+x) step: both models spin at about 20 rad/s with the rear wheels sliding.
+
+**Open:** the contact damping ratio (it still decides whether a current step spins the wheels); whether the one-step lag of `"quasi_static"` is acceptable or the dynamic model should become the reference.

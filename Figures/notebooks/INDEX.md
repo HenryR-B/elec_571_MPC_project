@@ -303,3 +303,15 @@ These come from running a notebook section with `RUN_PLANT_CHECKS = True` on a c
 | 4.15 LuGre vs the switch model | [Friction coefficient F/N vs slip speed, against the Stribeck curve](current_model/2026-10-24_LuGre-vs-switch-section-4.15/4.15-LuGre-vs-switch__Friction-coefficient-F-over-N-vs-slip-speed.png) |
 | 4.15 LuGre vs the switch model | [Sensitivity to the presliding deflection and damping ratio](current_model/2026-10-24_LuGre-vs-switch-section-4.15/4.15-LuGre-vs-switch__Sensitivity-to-presliding-deflection-and-damping.png) |
 | 4.15 LuGre vs the switch model | [Printed output](current_model/2026-10-24_LuGre-vs-switch-section-4.15/4.15-output.txt) |
+
+### 2026-10-24: 4.15 and 4.16 with the tuned LuGre (2 um presliding, creep smoothing; current model)
+
+| section | plot |
+|---|---|
+| 4.16 Switch model (no blend) and LuGre against the friction curve | [Wheel bench: LuGre force vs slip](current_model/2026-10-24_LuGre-tuned-2um-sections-4.15-4.16/4.16-Switch-vs-LuGre__Wheel-bench-LuGre-force-vs-slip.png) |
+| 4.16 Switch model (no blend) and LuGre against the friction curve | [Robot level: F/N vs slip and distance from the curve](current_model/2026-10-24_LuGre-tuned-2um-sections-4.15-4.16/4.16-Switch-vs-LuGre__Robot-level-F-over-N-vs-slip-and-distance-from-curve.png) |
+| 4.16 Switch model (no blend) and LuGre against the friction curve | [Rear slip and yaw rate per scenario](current_model/2026-10-24_LuGre-tuned-2um-sections-4.15-4.16/4.16-Switch-vs-LuGre__Rear-slip-and-yaw-rate-per-scenario.png) |
+| 4.15 LuGre vs the switch model | [Rear-left force, slip and robot motion per scenario](current_model/2026-10-24_LuGre-tuned-2um-sections-4.15-4.16/4.15-LuGre-vs-switch__Rear-left-force-slip-and-robot-motion-per-scenario.png) |
+| 4.15 LuGre vs the switch model | [Friction coefficient F/N vs slip speed](current_model/2026-10-24_LuGre-tuned-2um-sections-4.15-4.16/4.15-LuGre-vs-switch__Friction-coefficient-F-over-N-vs-slip-speed.png) |
+| 4.15 LuGre vs the switch model | [Sensitivity to presliding deflection and damping](current_model/2026-10-24_LuGre-tuned-2um-sections-4.15-4.16/4.15-LuGre-vs-switch__Sensitivity-to-presliding-deflection-and-damping.png) |
+| 4.15, 4.16 | [Printed output](current_model/2026-10-24_LuGre-tuned-2um-sections-4.15-4.16/4.15-4.16-output.txt) |

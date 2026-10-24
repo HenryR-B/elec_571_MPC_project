@@ -300,3 +300,62 @@ LuGre has no switching spikes.
 3. **Open questions:**
    - Which default to use: "switch" with the blend, "switch" with no blend, or "lugre"?
    - What presliding deflection? A measurement would settle the at-speed differences in 6.4. Until then, 0.05-0.1 mm keeps LuGre close to the Coulomb-Stribeck model, at slightly more solver effort (max 115-143 evaluations per step instead of 63).
+
+---
+
+## 7. LuGre tuned to the friction curve (sections 4.15-4.16, 2026-10-24)
+
+Section 6 used a 0.5 mm presliding deflection with constant damping. That version strayed from the curve after slip reversals. These are the constants and fixes that make it follow the curve.
+
+### 7.1 Why 0.5 mm strayed
+- **At zero slip** LuGre holds its bristle load: F = -sigma0 z, not zero.
+- **After the slip reverses**, the bristles must slide 2-3 deflections before the force changes sign. Meanwhile the slip accelerates at up to about 400 m/s^2. At 0.5 mm the force therefore kept the wrong sign up to about 1 m/s of slip.
+- **A constant sigma1** added sigma1 dz/dt while the bristles reloaded, overshooting mu_s N by up to 16%.
+
+### 7.2 Constants (single-wheel bench sweep, then the robot)
+
+| Constant | Value | Reason |
+|---|---|---|
+| `LUGRE_PRESLIDING_DEFLECTION` | 2 um (sigma0 = mu_s N / 2 um, about 1.8e6 N/m on a rear wheel) | See the trade-off table below |
+| sigma1 | critical damping against the rim inertia, x exp(-(v / 5 mm/s)^2) | Damps presliding only; no overshoot. A 20 mm/s band brought the overshoot back |
+| sigma2 (`LUGRE_VISCOUS_COEFF`) | 0 | The Stribeck curve already holds the velocity dependence |
+| `LUGRE_CREEP_SLIP` | 0.1 mm/s; \|v\| in dz/dt -> sqrt(v^2 + creep^2) | Removes the kink at zero slip that made the solver crawl. Keeps the static limit; adds 0.13 mm/s of creep at 80% of mu_s N |
+| `LUGRE_RTOL` | 1e-4 (the switch model stays at 1e-5) | Solver tolerance with "lugre" |
+
+Deflection trade-off on the wheel bench:
+
+| Deflection | Force held as the slip reverses | Sign change after | Error beyond 100 mm/s | Robot run time vs switch |
+|---|---|---|---|---|
+| 0.1 um | 0.98-0.99 mu_s N | 3 mm/s | 0.0% | about 6x |
+| **2 um** | **0.92-0.93** | **23-28 mm/s** | **0.9%** | **about 2x** |
+| 5 um | 0.89-0.90 | 37-44 mm/s | 2.0% | |
+| 20 um | 0.82 | 74-81 mm/s | 48% | |
+
+Things tried and rejected:
+- **A v tanh(v/eps) smoothing** of \|v\| broke the static limit: a wheel carried 1.07 mu_s N without slipping.
+- **A fixed-step Rosenbrock (ROS2) integrator** was fast (3.5 s against 9 s for the switch model), but its strongly damped large steps suppressed the micro-slip that starts breakaway, so wheels stuck above mu_s N.
+- **Starting each step from the largest previous step size** did not speed up the switch model; an earlier comparison claiming it did was wrong.
+
+### 7.3 Results (section 4.16: all checks pass)
+**Wheel bench:**
+- Breakaway peak 0.974-0.994 mu_s N.
+- 0.92-0.93 mu_s N held as the slip reverses; sign change 23-28 mm/s later.
+- Largest curve error beyond 100 mm/s: 0.86%.
+
+**Robot level, six scenarios.** Largest curve error beyond 100 mm/s: switch without blend 0.000%, LuGre 0.54% (99th percentile at most 0.13%). LuGre against the no-blend switch model:
+
+| Scenario | End position | End heading | Largest yaw-rate difference | Run time, LuGre vs switch |
+|---|---|---|---|---|
+| Slow current ramp | 26 mm | -0.35 deg | 0.15 rad/s | 51 s vs 20 s |
+| Fast reversals | 0 mm | -0.03 deg | | 14 s vs 13 s |
+| Forward 2.5 m/s | 2 mm | +0.44 deg | | 22 s vs 14 s |
+| Sideways 2 m/s | 1 mm | -0.55 deg (of a -671 deg spin) | | 25 s vs 14 s |
+| Diagonal | 0 mm | +0.03 deg | | 26 s vs 17 s |
+| At speed | 37 mm | -0.91 deg | | 40 s vs 17 s |
+
+- Rear-wheel sliding times match to within 2 ms.
+- Overall LuGre takes about 1.9x the switch model's run time (it was 30x before the fixes).
+- **Smoothness:** LuGre's force is continuous, but at these slip accelerations a reversal still completes within a fraction of a millisecond. The largest change between 1 ms samples is about the same as the switch model's (0.3-1.6 mu_s N; both are driven by the step commands in these tests). A larger deflection makes the transitions slower (20 um: sign change about 75 mm/s after a reversal, robot within 118 mm / 3 deg at speed) at the cost of curve accuracy.
+
+### 7.4 Conclusion
+With these constants LuGre behaves like the Coulomb-Stribeck switch model without the blend, at robot level and on the curve, while keeping a continuous force that never drops to zero at a slip reversal. The default law is still `"switch"`. Setting `DRIVE_SLIDING_LAW = "lugre"` uses LuGre throughout, at about twice the run time.

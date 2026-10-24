@@ -208,7 +208,7 @@ import time
 from contextlib import contextmanager
 
 COMPARISON_DT = 1e-3
-REAR = [2, 3]
+REAR_WHEELS = [2, 3]
 
 
 @contextmanager
@@ -326,7 +326,7 @@ def steady_sliding(log, min_slip=0.02, settle_s=0.1):
 
 
 def rear_slide_time(log):
-    return (~log["mode"][:, REAR]).sum(axis=0) * COMPARISON_DT
+    return (~log["mode"][:, REAR_WHEELS]).sum(axis=0) * COMPARISON_DT
 '''
 
 
@@ -367,7 +367,7 @@ for name, runs in lugre_runs.items():
         error = curve_error(log["slip"], log["force"], log["limit"])[steady]
         steady_text = (f"steady-sliding error vs the Stribeck curve median {100 * np.median(error):.2f}%, "
                        f"95th percentile {100 * np.percentile(error, 95):.2f}% ({steady.sum()} samples)") if steady.any() else "no steady sliding"
-        print(f"    {law:16s}: peak force {np.max(np.abs(log['force'][:, REAR]) / log['limit'][:, REAR]):.3f}; "
+        print(f"    {law:16s}: peak force {np.max(np.abs(log['force'][:, REAR_WHEELS]) / log['limit'][:, REAR_WHEELS]):.3f}; "
               f"rear sliding time {np.round(rear_slide_time(log), 3)} s; peak |yaw rate| {np.abs(log['twist'][:, 2]).max():.2f} rad/s; "
               f"end pose x {log['pose'][-1, 0]:+.3f} m, y {log['pose'][-1, 1]:+.3f} m, heading {np.degrees(log['pose'][-1, 2]):+.1f} deg; "
               f"{steady_text}; peak |z| {1e6 * np.abs(log['bristle']).max():.3f} um; "
@@ -395,7 +395,7 @@ for presliding, damping_ratio in SENSITIVITY:
     end = log["pose"][-1]
     ends = "; ".join(f"vs {label}: position {1e3 * np.linalg.norm(end[:2] - ref['pose'][-1, :2]):.0f} mm, "
                      f"heading {np.degrees(end[2] - ref['pose'][-1, 2]):+.1f} deg" for label, ref in references.items())
-    print(f"  lugre, presliding {1e6 * presliding:g} um, damping ratio {damping_ratio:.1f}: peak force {np.max(np.abs(log['force'][:, REAR]) / log['limit'][:, REAR]):.3f} of mu_s N, "
+    print(f"  lugre, presliding {1e6 * presliding:g} um, damping ratio {damping_ratio:.1f}: peak force {np.max(np.abs(log['force'][:, REAR_WHEELS]) / log['limit'][:, REAR_WHEELS]):.3f} of mu_s N, "
           f"rear sliding time {np.round(rear_slide_time(log), 3)} s, peak |yaw rate| {np.abs(log['twist'][:, 2]).max():.2f} rad/s; end {ends}; "
           f"solver evaluations per step median {np.median(log['nfev']):.0f}, max {log['nfev'].max()}; run {log['wall_s']:.0f} s")
 
@@ -557,7 +557,7 @@ for name, runs in strict_runs.items():
     print(f"    lugre vs switch, no blend: end position {1e3 * np.linalg.norm(lugre_log['pose'][-1, :2] - switch_log['pose'][-1, :2]):.0f} mm, "
           f"heading {np.degrees(lugre_log['pose'][-1, 2] - switch_log['pose'][-1, 2]):+.2f} deg; largest yaw-rate difference "
           f"{np.abs(lugre_log['twist'][:, 2] - switch_log['twist'][:, 2]).max():.3f} rad/s; largest rear slip difference "
-          f"{1e3 * np.abs(lugre_log['slip'][:, REAR] - switch_log['slip'][:, REAR]).max():.0f} mm/s")
+          f"{1e3 * np.abs(lugre_log['slip'][:, REAR_WHEELS] - switch_log['slip'][:, REAR_WHEELS]).max():.0f} mm/s")
 for label, value in worst.items():
     assert value <= STRICT_TOLERANCE, f"{label}: off the curve by {100 * value:.2f}% of mu_s N beyond {1e3 * STRICT_IGNORE_SLIP:.0f} mm/s"
 print(f"PASS: LuGre holds the force through slip reversals and breaks away at mu_s N; wheels slide with both models; "
@@ -609,7 +609,7 @@ fig, axes = plt.subplots(len(strict_runs), 2, figsize=(16, 2.8 * len(strict_runs
 for row, (name, runs) in zip(axes, strict_runs.items()):
     for label, log in runs.items():
         color, style = STRICT_COLORS[label], "-" if label == "lugre" else "--"
-        for wheel in REAR:
+        for wheel in REAR_WHEELS:
             row[0].plot(log["time"], 1e3 * log["slip"][:, wheel], color=color, linestyle=style, linewidth=1.0,
                         label=f"{rc.WHEEL_NAMES[wheel]}, {label}")
         row[1].plot(log["time"], log["twist"][:, 2], color=color, linestyle=style, label=f"yaw rate, {label}")

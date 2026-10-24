@@ -3,7 +3,7 @@
 Status (2026-10-24):
 - The speed-ups in section 5 are applied.
 - LuGre is implemented as `DRIVE_SLIDING_LAW = "lugre"`, with section 4.15 comparing it with the switch model. Results are in section 6.
-- The default law is still `"switch"`.
+- The default law is `"lugre"` since 2026-10-24 (section 7); `DRIVE_SLIDING_LAW = "switch"` turns it off.
 
 Scope: the drive (d) axis friction between each omni wheel and the floor in `robot_model_current.ipynb` and `robot_model_voltage.ipynb`. The roller (a) axis friction is unchanged throughout.
 
@@ -358,4 +358,6 @@ Things tried and rejected:
 - **Smoothness:** LuGre's force is continuous, but at these slip accelerations a reversal still completes within a fraction of a millisecond. The largest change between 1 ms samples is about the same as the switch model's (0.3-1.6 mu_s N; both are driven by the step commands in these tests). A larger deflection makes the transitions slower (20 um: sign change about 75 mm/s after a reversal, robot within 118 mm / 3 deg at speed) at the cost of curve accuracy.
 
 ### 7.4 Conclusion
-With these constants LuGre behaves like the Coulomb-Stribeck switch model without the blend, at robot level and on the curve, while keeping a continuous force that never drops to zero at a slip reversal. The default law is still `"switch"`. Setting `DRIVE_SLIDING_LAW = "lugre"` uses LuGre throughout, at about twice the run time.
+With these constants LuGre behaves like the Coulomb-Stribeck switch model without the blend, at robot level and on the curve, while keeping a continuous force that never drops to zero at a slip reversal. `"lugre"` is now the default (about twice the run time of `"switch"`). With it the full check suite passes on both notebooks, after two switch-specific checks were adjusted:
+- 4.4 `toe02` allows 1e-3 instead of 1e-4 between chassis and wheel kinematics while gripping, because LuGre wheels creep slightly under load.
+- 4.14 always runs the switch law, because it tests that law's blend.

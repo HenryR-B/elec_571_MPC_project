@@ -33,13 +33,12 @@ def run(G):
         command = G['body_command'](forward=float(np.interp(t, KEY_T, KEY_FORWARD)), left=float(np.interp(t, KEY_T, KEY_LEFT)))
         out = sim.step(G['inverse_kinematics'](command))
         rows.append(np.r_[sim.state, out["ground_forces"], out["slip_speeds"], out["rolling"], out["force_needed"]])
-    return np.array(rows), time.perf_counter() - t0
+    return np.array(rows), time.perf_counter() - t0, sim.state.size
 
 
 old_G, new_G = load(sys.argv[1]), load(sys.argv[2])
-old, old_time = run(old_G)
-new, new_time = run(new_G)
-n = old_G['WheelSlipRobotSimulator'](dt=1e-3).state.size
+old, old_time, n = run(old_G)
+new, new_time, _ = run(new_G)
 print(f"{len(old)} steps: old {old_time:.1f} s, new {new_time:.1f} s, speed-up {old_time / new_time:.2f}x")
 print(f"identical bit for bit: {np.array_equal(old, new)}; largest difference: states {np.max(np.abs(old[:, :n] - new[:, :n])):.3e}, "
       f"forces {np.max(np.abs(old[:, n:n + 4] - new[:, n:n + 4])):.3e} N, grip/slide modes differ in {int(np.sum(old[:, n + 8:n + 12] != new[:, n + 8:n + 12]))} samples")
@@ -52,4 +51,7 @@ first = plant.discrete_map(state, request, np.zeros(3))
 cached = plant.discrete_map(state, request, np.zeros(3))
 plant._step_cache = {}
 fresh = plant.discrete_map(state, request, np.zeros(3))
-print(f"step cache: reused result equals a fresh integration: {np.array_equal(cached, fresh) and np.array_equal(first, fresh)}")
+# With PLANT_REUSE_JACOBIAN the fresh integration starts from the stored Jacobian, so it can differ
+# within the tolerance; the reused result must equal the first one exactly.
+print(f"step cache: reused result equals the first integration: {np.array_equal(cached, first)}; "
+      f"a fresh integration differs by at most {np.max(np.abs(fresh - first)):.1e}")

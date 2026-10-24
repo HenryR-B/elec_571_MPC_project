@@ -124,7 +124,7 @@ MAX_MOTOR_VOLTAGE = 16.8 # V
 # Wheel Roller Friction
 MU_D_STAT = 0.9   # TBD: measure via tilt test (wheels aligned, common direction)
 MU_D_DYN = 0.422 # dynamic friction coefficient, assumed based on lower than the calculated slip at 2.5m/s => 0.422
-ALPHA_D = 10 # relatively fast transition from rolling to slipping due to motor torque
+ALPHA_D = 5 # [s/m] mu_s -> mu_k decay with slip speed: halfway at 0.14 m/s, 95% at 0.6 m/s (was 10)
 K_SMOOTH_D = 200.0 
 # Sliding drive friction, "continuous" law in the notebooks (DRIVE_SLIDING_LAW):
 #   F_d = -N mu_d(|v|) tanh(v / DRIVE_SLIP_REGULARIZATION)

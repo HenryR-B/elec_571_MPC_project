@@ -361,3 +361,14 @@ Things tried and rejected:
 With these constants LuGre behaves like the Coulomb-Stribeck switch model without the blend, at robot level and on the curve, while keeping a continuous force that never drops to zero at a slip reversal. `"lugre"` is now the default (about twice the run time of `"switch"`). With it the full check suite passes on both notebooks, after two switch-specific checks were adjusted:
 - 4.4 `toe02` allows 1e-3 instead of 1e-4 between chassis and wheel kinematics while gripping, because LuGre wheels creep slightly under load.
 - 4.14 always runs the switch law, because it tests that law's blend.
+
+### 7.5 Implementation check (2026-10-26)
+`tests/verify_lugre.py` checks the LuGre code in a notebook independently of the comparison sections. On both notebooks every check passes:
+- **Equations:** `lugre_contact` matches dz/dt = v - sigma0 |v| z / g(v) and F = -(sigma0 z + sigma1 dz/dt + sigma2 v) in physical units, to rounding.
+- **Steady sliding:** on the Stribeck curve within 0.005% of mu_s N, always opposing the slip.
+- **Static limit:** the bristle load never exceeds mu_d/mu_s, so the force never exceeds the limit.
+- **Zero slip:** the force is the held bristle load.
+- **Lifted wheel:** carries no force.
+- **Dissipation:** friction does negative net work over slip cycles.
+- **State slots:** in both plants the bristle states (current 14-17, voltage 18-21) feed the force and receive the rates; blend weights are inert under LuGre and bristles frozen under the switch law.
+- **Creep:** under a very slow push the bristles relax as they load (load 0.71 at 0.1 mm/s of slip), so holding a load takes a small creep slip, as designed.

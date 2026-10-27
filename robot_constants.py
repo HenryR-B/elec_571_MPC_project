@@ -109,17 +109,61 @@ ROLLER_GAP_DTHETA = np.degrees(ROLLER_PITCH) - ROLLER_WIDTH_DTHETA  # gap width 
 
 
 # Motor
-VEL_P_GAIN = 0.1
-VEL_I_GAIN = 1
+# Simovr (Tinymovr) velocity-loop gains and current limit, as set by Rustware
+# (crates/robot/main/src/drivetrain.rs, SimovrDrivetrain). The firmware works in encoder ticks:
+# every sensor is normalised to SENSOR_COMMON_RES_TICKS = 8192 ticks per revolution (Tinymovr
+# firmware common.h), and Rustware scales wheel speeds with the same 8192. In the firmware's
+# velocity loop (controller.c), Iq_setpoint = p_gain * (vel error in tick/s) + integrator, and
+# integrator += i_gain * (vel error in tick/s) * dt, so p_gain is in A/(tick/s) and i_gain in A/tick.
+ENCODER_TICKS_PER_REV = 8192
+VEL_P_GAIN_TICKS = 0.00015  # [A/(tick/s)] Rustware value
+VEL_I_GAIN_TICKS = 0.015    # [A/tick]     Rustware value
+# The same gains in SI, for a velocity error in rad/s of wheel speed (wheels are direct drive):
+VEL_P_GAIN = VEL_P_GAIN_TICKS * ENCODER_TICKS_PER_REV / (2 * np.pi)  # [A/(rad/s)] = 0.196
+VEL_I_GAIN = VEL_I_GAIN_TICKS * ENCODER_TICKS_PER_REV / (2 * np.pi)  # [A/rad]     = 19.6
 
-IQ_LIMIT = 5.0  # [A]
+IQ_LIMIT = 20.0  # [A] Simovr current limit (Rustware IQ_LIMIT), in the FOC frame (q-axis current Iq)
+# The motor model here is DC-equivalent (see MOTOR_RESISTANCE). The same Simovr limit as a DC-equivalent
+# current is sqrt(3)/2 x Iq; the torque and the copper heat both give that factor:
+#   torque: Kt_DC i = Kt_FOC Iq with Kt_FOC = (sqrt(3)/2) Kt_DC (8.27/KV vs 9.55/KV)  ->  i = (sqrt(3)/2) Iq
+#   heat:   R_LL i^2 = 1.5 R_phase Iq^2 = 0.75 R_LL Iq^2                               ->  i = (sqrt(3)/2) Iq
+MOTOR_CURRENT_LIMIT = IQ_LIMIT * np.sqrt(3) / 2  # [A] DC-equivalent current limit = 17.3 A
+
+# Simovr (Tinymovr) current loop, from the firmware (controller.c, config.h); Rustware does not change them.
+# Each PWM period: i_est += CURRENT_FILTER_GAIN (i - i_est); e = Iq_setpoint - i_est;
+# integrator += CURRENT_I_GAIN e / PWM_FREQ_HZ; V = CURRENT_P_GAIN e + integrator, limited to
+# PWM_LIMIT * V_bus, with the integrator multiplied by INTEGRATOR_DECAY each period while limited.
+PWM_FREQ_HZ = 20000           # [Hz] current (and velocity) loop rate
+CURRENT_BANDWIDTH = 2000.0    # firmware default. Its spec labels it Hz, but the gains below use it as
+                              # rad/s (no 2 pi), so the current loop responds at about 2000 rad/s = 320 Hz.
+PWM_LIMIT = 0.8               # largest applied voltage as a fraction of the bus voltage
+INTEGRATOR_DECAY = 0.995      # per PWM period, while the current or velocity loop is limited
+CURRENT_FILTER_GAIN = 0.3     # current-estimate low-pass filter, per PWM period
 
 MOTOR_KV = 360
 MOTOR_KT = 60 / (2 * np.pi * MOTOR_KV)
 
-MOTOR_RESISTANCE = 0.24 # Ohms
-MOTOR_INDUCTANCE = 0.133e-3 # H
+# DC-equivalent motor model: V = R i + L di/dt + Kb w, T = Kt i, with Kt = Kb = 60 / (2 pi KV).
+# R and L are LINE-TO-LINE values, the frame that goes with Kt from KV: a hobby motor's KV is
+# no-load rpm per volt from a drone ESC, which drives the supply between two leads at a time.
+# Do not halve R and L on their own: phase values (0.12 ohm, 0.0665 mH) belong to the FOC (dq) frame,
+# where Kt = 8.27/KV per amp of Iq and the copper loss is 1.5 R Iq^2. Mixing phase R with this Kt makes
+# the motor sqrt(2) stronger than measured (motor constant Kt/sqrt(R) 0.077 instead of 0.054 N m/sqrt(W)).
+# Interface with the Simovr (FOC): its Iq limit corresponds to about 0.866 x Iq of DC-equivalent
+# current (20 A Iq -> about 17.3 A), and its current loop is set by its bandwidth, so the same
+# bandwidth with these R and L gives the same closed-loop response.
+# Source: a SimpleFOC forum post measuring a generic 5010 360 KV motor between lead pairs (average of
+# three pairs); not measured on our motors, and MOTOR_KV is the listing value (about 300-360).
+# https://community.simplefoc.com/t/what-current-and-voltage-limits-to-use-for-this-motor/4245
+MOTOR_RESISTANCE = 0.24 # Ohms, line-to-line
+MOTOR_INDUCTANCE = 0.133e-3 # H, line-to-line
 MAX_MOTOR_VOLTAGE = 16.8 # V
+
+# Current-loop gains as the firmware sets them from the bandwidth (controller_update_I_gains):
+# P = bandwidth x L, I = bandwidth x R. The board computes them from its calibrated phase R and L (FOC
+# frame); here they use the DC-equivalent R and L above, which gives the same closed-loop response.
+CURRENT_P_GAIN = CURRENT_BANDWIDTH * MOTOR_INDUCTANCE  # [V/A]
+CURRENT_I_GAIN = CURRENT_BANDWIDTH * MOTOR_RESISTANCE  # [V/(A s)]
 
 # Wheel Roller Friction
 MU_D_STAT = 0.9   # TBD: measure via tilt test (wheels aligned, common direction)

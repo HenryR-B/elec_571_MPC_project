@@ -2,71 +2,35 @@
 
 Written 2026-10-26. Local note, not committed. Start here next time.
 
+## First, added 2026-10-27: find out what Dana changed
+
+Dana has changed her own copy of the model since our review and has "got parameters for a Pololu motor". Our working copy was meanwhile reverted to her architecture: voltage input only, current input and Simovr driver removed (notes kept in `archive/bldc_current_loop/bldc_current_loop_notes.md`), LuGre, backward Euler for the stiff states, world-frame velocity, design toggle. We need the two models to be similar again.
+
+- [x] **Get Dana's updated notebook (2026-10-28):** `dana-models/robot-simulation-open-loop-v3.ipynb`. Against her original: LuGre (Henry's parameters) with an exponential bristle update, the Pololu 37D 30:1 motor, `V_max` = 12 V and `I_max` = 20 A clips in the model, Henry's axes, our mass/Jzz/h/Rb/r, and new test voltages (Blocks 1–2: 1 V for 0.5 s; Block 3: 10 V; multi-stage still ±4 V).
+- [x] **Run both models with her constants** (`tests/compare_dana_v3.py`, noise off): paths agree within 0.5–3.4 mm on the non-spinning tests; 74 mm on the side-to-side and 197 mm on the 10 V strafe, which both spin. Run time about the same (0.6 s vs 0.9 s for all 12 tests).
+- [x] **Merged with Dana's v3 (2026-10-28), as agreed with Henry** — change 8 in `dana-models/open_loop_model_changes.md`:
+  - from hers: the Pololu 37D 30:1 motor and J_w, the 12 V supply clip (`V_actual`), her tests and test voltages, her text (spec layout, flowchart, architecture, configuration, test descriptions, ASCII frame diagram);
+  - kept ours: the backward-Euler wheel–bristle step (hers chatters), the world-frame chassis (hers has the curved-path bug), the load-torque sign, J_zz about the CoG (0.007444), constants from `rc`, the layout figure;
+  - CoG: `COG_Y_MM` (0, centred) and `COG_Z_MM` (61.1 mm) as independent parameters; the built/proper toggle is gone;
+  - not taken: her 20 A current clip (no motor driver chosen; the Pololu draws up to ~11 A when reversing).
+- [ ] **Tell Dana** what was kept from ours and why: her wheel chatter (55–92 % of steps, 62–97 mm/s slip on gripping wheels), the local-velocity chassis bug, her T_load sign, and J_zz.
+- [x] **Motor:** Dana's Pololu 37D 30:1 (in the notebook; the gear ratio is inside her K_t, K_b and J_w). Our BLDC values stay in `robot_constants.py` for December.
+- [ ] **Controller rate:** Dana pointed out the plant runs at 1 kHz but the controller will run at about 40–50 Hz. So the simulation layer holds each voltage command for 20–25 plant steps (zero-order hold), and the MPC's own prediction model is discretised at 20–25 ms. The plant keeps its 1 ms step for the fast dynamics: the motor current (L/R = 0.55 ms with our motor) and the LuGre bristles.
+- [x] **Backward Euler (2026-10-27):** Dana's 1 ms discrete step, with backward Euler instead of Forward Euler for the current, wheel speed and LuGre bristles, which are too stiff for Forward Euler at 1 ms (Dana asked for a discrete LuGre for runtime). Within 0.6–2.6 mm of the same model at 0.1 ms on Dana's tests; the full notebook runs in 12 s. See change 5 in `dana-models/open_loop_model_changes.md`. Tell Dana, and compare with her discrete LuGre when she sends her version.
+- [x] **Voltage limit:** the plant clips |V| ≤ 12 V (Dana's). The controller should still respect the motor's traction limit.
+
+The sections below are from 2026-10-26, before these changes, and are partly out of date.
+
 ## Where things are
 
 | What | Where |
 |---|---|
 | Dana's original model (unchanged) | `dana-models/RobotSimulationOpenLoopModel.ipynb` |
 | Working copy: Dana's model, Henry's constants, math-quadrant axes, 4 switchable fixes, added sections A–D | `RobotSimulationOpenLoopModel_HenryConstants.ipynb` |
-| Differences between the two models, with a proposal per row | `open_loop_model_comparison.md` |
+| Differences between the two models, with a proposal per row | `archive/continuous_time/open_loop_model_comparison.md` |
 | Branch (pushed; last commit `89797de`) | `open-loop-model-robot-constants` |
-| Henry's full models (LuGre, load transfer, voltage plant) | `robot_model_voltage.ipynb`, `robot_model_current.ipynb` on `main` |
+| Henry's full models (LuGre, load transfer, voltage plant) | `archive/continuous_time/robot_model_voltage.ipynb`, `robot_model_current.ipynb` |
 | Load-transfer / pitch-roll research | `chassis_load_transfer_plan.md` (branch `chassis-load-transfer`) |
 
 How to run: open the working copy and run all; it takes about 2 minutes. **One notebook run at a time**, because two parallel runs pushed the CPU to 95 °C.
 
-## Step 1: collect Dana's answers (before any code change)
-
-Go through `open_loop_model_comparison.md` with Dana and record a decision per row. Already settled:
-
-- [x] **Symbols:** Dana agreed to Henry's convention: θ̇ for wheel speeds, φ for heading, ω for yaw rate.
-- [x] **Body axes:** Dana agreed to Henry's axes: x right, y forward.
-
-Still to decide:
-
-- [x] Symbol/axes conversion: done by Claude in the working copy (2026-10-26).
-- [ ] **Tell Dana:** her chassis update integrated the body-frame velocity as if the axes did not turn. The copy now integrates the world velocity (`fix_rotating_frame`), and her H is correct in math-quadrant axes, so `fix_geometry` is gone. Her load split takes pitch from a_x, which is sideways in these axes.
-- [ ] **Drive friction default:** `'dana'` (chatters 59× per rear wheel while braking), `'slip_velocity'` (fast, 1 toggle), or `'lugre'` (1 toggle, about 28× slower, needs `lugre_dt = 2e-5`).
-- [ ] **Roller friction** (`roller_friction`) on by default? It cuts the peak forward acceleration from 4.98 to 4.38 m/s².
-- [ ] **Wheel losses** `'smoothed'` by default? It removes the coast-down chatter.
-- [ ] **Wheel inertia in the sticking force:** on or off (about 1% effect)?
-- [ ] **CoG offset:** on (CAD, 10.2 mm forward) or off (centred)?
-- [ ] **Disturbances:** Dana's white noise, Henry's model, or both selectable? Henry's load vibration reaches its ±50% cap at about 2.6 m/s and spins the open-loop robot out (−55° in 1.5 s), so agree on its amplitude (`LOAD_VIBRATION_*` in `robot_constants.py`).
-- [ ] **Plant step:** keep 1 ms explicit for Dana's controller work?
-- [ ] Do the four fixes stay on by default? (Recommended: yes.)
-- [ ] Dana's Test 2 (equal ±2 V strafe) spins the 30/45 robot at −15 rad/s with wheel-4 chatter; this was there before the conversion. Change the test voltages to the strafe's wheel-speed ratios?
-
-## Step 2: apply the agreed changes (working copy only)
-
-Do them in this order, one notebook run after each, and check the listed result before moving on.
-
-1. **Symbol and axes conversion: DONE 2026-10-26.** All numbers matched after relabelling; the only changes were O(dt) heading differences on spinning runs, from the world-frame integration.
-   - Rename ω → `theta_dot` (wheel speeds), heading θ → `phi`, yaw rate → `omega`.
-   - Switch the body axes to x right, y forward.
-   - Update Dana's cells, the plots, and the markdown equations.
-   - Check: every verification check in `hc000003` and sections A–D gives the same numbers as before, apart from the axis relabelling. In Henry's axes, forward is +y.
-2. **New defaults** from Step 1: set the agreed option defaults in `EXTENDED_DEFAULTS` (or move them into the base class if Dana wants them as standard).
-   - Check: the equality cell still passes for whatever counts as "Dana default".
-3. **Clean-ups noticed this session:**
-   - [ ] `plot_diagnostics` warns "No artists with labels" on empty legends; only call `legend()` when there are handles.
-   - [ ] Dana's original plot cells have a redundant `'r-'` format plus a `ls` keyword (UserWarning); drop one.
-   - [ ] Energy audit: 2.2% unaccounted. Check how much comes from the wheel-speed snap at re-stick (compare `'dana'` and `'slip_velocity'` friction) and say so in the text.
-4. **Merge decision:** once Dana is happy, merge `open-loop-model-robot-constants` into `main`, and decide whether the working copy replaces `dana-models/RobotSimulationOpenLoopModel.ipynb` as the shared model.
-
-## Step 3: then move on to controllers (Dana's plan)
-
-Only after the plant is agreed:
-
-1. **Path generator class:** time-indexed pose/velocity references, such as forward-stop, strafe, figure-eight, and the angled line.
-2. **Two-level PID:**
-   - Outer loop: pose error → body velocity → inverse kinematics.
-   - Inner loops: four wheel-speed PIDs → voltage.
-   - Anti-windup reads the plant's applied voltage and current (`plant.last["V_applied"]`).
-3. **MPC** on the same plant and paths.
-
-## Open items carried over (not blocking)
-
-- **Current-model PID blow-up:** Henry's `robot_model_current.ipynb` blows up at 1.06 s with disturbances on (yaw rate 3·10⁴ rad/s). Not investigated; parked because the voltage model is the one in use.
-- **Current file as FOC:** convert `robot_model_current.ipynb` to current-commanded voltage (FOC current loop inside the driver). Agreed in principle, not started.
-- **Henry's LuGre work on the other desktop:** push it and reconcile with `main` (`main` already has LuGre commits `a83b871`, `87d6e17`, `ac01cf5`).
-- **Dynamic heave/pitch/roll (Level 2)** in `chassis_load_transfer_plan.md`: needs agreed contact stiffness and damping. Level 1 (quasi-static load transfer) is already in both Henry's model and the working copy.

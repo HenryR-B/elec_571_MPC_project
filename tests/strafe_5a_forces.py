@@ -17,8 +17,7 @@ rows = []
 for k in range(n):
     th = s.pos_global[2]
     s, T_load, S = sim.step(s, cmd)
-    F = (T_load - p["Crr"] * 0) / p["r"]          # approximate: step-average floor force incl. rolling torque / r
-    # exact step-average floor force: rebuild from the solver integral is not exposed, so use T_load minus rolling resistance
+    F = (T_load - p["Crr"] * 0) / p["r"]          # approximate: floor force over the step, incl. the rolling torque / r
     th_mid = 0.5 * (th + s.pos_global[2])
     c, sn = np.cos(th_mid), np.sin(th_mid)
     d_body = sim.H[:, :2]                          # drive directions in body axes

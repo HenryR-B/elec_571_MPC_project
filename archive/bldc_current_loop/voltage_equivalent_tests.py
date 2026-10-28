@@ -2,11 +2,12 @@
 voltage V would drive through our motor at the present wheel speed, I_cmd = clip((V - Kb*omega) / R, +-MOTOR_CURRENT_LIMIT),
 so a wheel that spins up loses current through back-EMF exactly as under voltage drive. Compared with the flat-current
 tests now in the notebook (the same numbers in amps). 30/45, noise off, both mechanical designs.
-Usage: python tests/voltage_equivalent_tests.py RobotSimulationOpenLoopModel_HenryConstants.ipynb"""
+Usage: python archive/bldc_current_loop/voltage_equivalent_tests.py RobotSimulationOpenLoopModel_HenryConstants.ipynb
+(It needs a notebook version that still takes current commands.)"""
 import json, re, sys
 from pathlib import Path
 import numpy as np
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repository root
 nb = json.load(open(sys.argv[1], encoding="utf-8"))
 d = {c.get("id"): "".join(c["source"]) for c in nb["cells"]}
 FWD, STR, ROT = np.array([1, -1, -1, 1.0]), np.array([-1, -1, 1, 1.0]), np.ones(4)

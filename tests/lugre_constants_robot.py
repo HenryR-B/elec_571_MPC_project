@@ -1,4 +1,4 @@
-"""LuGre constants in the full (implicit) model: the current set (2 um, zeta 1, fade 5 mm/s) vs the tested softer set
+"""LuGre constants in the full model: the current set (2 um, zeta 1, fade 5 mm/s) vs the tested softer set
 (30 um, zeta 3, fade 50 mm/s), on Dana's manoeuvres and a slow current ramp. Noise off, 30/45 layout.
 Usage: python tests/lugre_constants_robot.py RobotSimulationOpenLoopModel_HenryConstants.ipynb"""
 import json, sys, time
@@ -29,7 +29,7 @@ for name, T, fn in SCEN:
         t0, path, ev, first_slip, slip_steps = time.time(), [], 0, [None] * 4, np.zeros(4)
         for k in range(n):
             s, _, S = sim.step(s, fn(k * dt))
-            path.append(s.pos_global.copy()); ev += sim.last_nfev
+            path.append(s.pos_global.copy()); ev += sim.last_iterations
             slip_steps += S
             for w in range(4):
                 if first_slip[w] is None and S[w]:
@@ -41,4 +41,4 @@ for name, T, fn in SCEN:
     for label, (p, s, wall, evs, fs, sl) in res.items():
         fs_txt = ", ".join("-" if f is None else (f"{f:.3f} s" + (f" ({8.0 * f / 1.5:.2f} A)" if name.startswith("ramp") else "")) for f in fs)
         print(f"   {label:30}: end speed {np.hypot(*s.v_local[:2]):.3f} m/s | first slip per wheel [{fs_txt}] | "
-              f"time slipping {np.round(100 * sl)}% | {evs:.0f} evaluations per step, {wall:.1f} s wall", flush=True)
+              f"time slipping {np.round(100 * sl)}% | {evs:.1f} solves per step, {wall:.1f} s wall", flush=True)

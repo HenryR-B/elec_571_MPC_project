@@ -3,10 +3,15 @@
 **Working copy:** `RobotSimulationOpenLoopModel_HenryConstants.ipynb`
 **Branch:** `open-loop-model-robot-constants`
 **Dana's original (unchanged):** `dana-models/RobotSimulationOpenLoopModel.ipynb`
+**Dana's v3 (unchanged):** `dana-models/robot-simulation-open-loop-v3.ipynb`, merged into the working copy on 2026-10-28 (entry 8)
 
 Each change is made only when Henry asks for it, one at a time. Each entry says what changed, why, where, and how it was checked. The equations in the notebook's specification cell are updated with the code, in Dana's layout.
 
-**Order:** the entries are ordered by how much they change the model, smallest first, not by date. Each heading gives its commit, or says it is not committed yet. In time order they were made 0, 1, 8, 4, 7, 5, 3, 2, 6.
+**Order:** the entries are ordered by how much they change the model, smallest first, not by date. Each heading gives its commit, or says it is not committed yet. In time order they were made 0, 1, 7, 4, 5, 3, 2, 6, 8.
+
+**Removed again:** for a while the model took a current command per motor, through a model of the Simovr (Tinymovr firmware) current loop. Henry and Dana then agreed the project uses a voltage input, like a PWM-driven DC motor, with the controller choosing the voltage, so the current input and the driver were removed (2026-10-27). The model's input is Dana's terminal voltage again, and her tests run on her original voltages. Everything worked out for the current loop, the firmware values and the removed code are kept in `archive/bldc_current_loop/bldc_current_loop_notes.md`, for the BLDC model planned for December.
+
+**Checks in entries 2 and 5** were run with earlier constants (and entry 2 while the model took current commands, in amps). They are kept as they were.
 
 ---
 
@@ -29,7 +34,9 @@ Each change is made only when Henry asks for it, one at a time. Each entry says 
 | `mu_s`, `mu_k` | 0.60, 0.45 | 0.90, 0.422 | `MU_D_STAT`, `MU_D_DYN` |
 | `sigma_V`, `sigma_mu` | 0.15 N, 0.03 | unchanged | no measured values yet |
 
-The previous, larger version (with several unrequested fixes) is kept as `RobotSimulationOpenLoopModel_ClaudeReference.ipynb`, for reference only.
+Since entry 8 the motor (`R`, `Lm`, `Kt`, `Kb`) and `Jw` are Dana's Pololu values, and `Jzz` is the CAD inertia about the CoG (entry 6).
+
+The previous, larger version (with several unrequested fixes) is kept as `archive/continuous_time/RobotSimulationOpenLoopModel_ClaudeReference.ipynb`, for reference only.
 
 ---
 
@@ -84,24 +91,24 @@ The previous, larger version (with several unrequested fixes) is kept as `RobotS
 
 **Equations (spec Steps 5.4 and 5.5, in Dana's layout):**
 
-$$\frac{d\dot x_g}{dt} = a_{x,r}\cos\theta - a_{y,r}\sin\theta, \qquad \frac{d\dot y_g}{dt} = a_{x,r}\sin\theta + a_{y,r}\cos\theta, \qquad \frac{d\dot\theta}{dt} = \alpha_r$$
+$$\dot x_{g,k+1} = \dot x_{g,k} + dt\,(a_{x,r}\cos\theta_k - a_{y,r}\sin\theta_k), \qquad \dot y_{g,k+1} = \dot y_{g,k} + dt\,(a_{x,r}\sin\theta_k + a_{y,r}\cos\theta_k), \qquad \dot\theta_{k+1} = \dot\theta_k + dt\,\alpha_r$$
 
-$$\frac{dx}{dt} = \dot x_g, \qquad \frac{dy}{dt} = \dot y_g, \qquad \frac{d\theta}{dt} = \dot\theta$$
+$$x_{k+1} = x_k + dt\,\dot x_{g,k+1}, \qquad y_{k+1} = y_k + dt\,\dot y_{g,k+1}, \qquad \theta_{k+1} = \theta_k + dt\,\dot\theta_{k+1}$$
 
 $$\dot x_r = \dot x_g\cos\theta + \dot y_g\sin\theta, \qquad \dot y_r = -\dot x_g\sin\theta + \dot y_g\cos\theta \quad \text{(derived, for } \mathbf H\text{)}$$
 
 - **Accelerations:** a_r = M⁻¹HᵀF, as before. The forces act along body directions because the wheels are fixed to the chassis, so they are rotated by θ into the room frame.
-- **No ω × v term appears anywhere.** The local velocities are only computed, never integrated.
+- **No ω × v term appears anywhere.** The local velocities are only computed, never advanced themselves.
 - **The mass matrix** diag(M_r, M_r, J_zz) is the same in both frames.
 
 **Code changes (cell `ebf0a37d`):**
-- The solver's velocity block now holds `v_global`, the integrated state.
-- `advance_chassis_kinetics(F_floor, theta)` returns the local acceleration and the global acceleration R(θ)·a_local.
+- The velocity state is `v_global`, advanced in the world frame.
+- `advance_chassis_kinetics` rotates the local acceleration into the world frame with R(θ) and advances `v_global`, then the pose.
 - New `global_to_local(v_global, theta)` gives R(θ)ᵀ·v_global, the local velocities that H and the slip speeds use.
 - `step` stores `v_global` and derives `v_local`.
 - The load transfer still uses the local accelerations, which is correct: pitch and roll depend on body-frame acceleration.
 
-**Text:** spec section 2 (which velocity is integrated), Steps 5.4, 5.5 and 5.7 (the state vector now holds the global velocities), section 4, item 6, the flowchart and the architecture note.
+**Text:** spec section 2 (which velocity is advanced), Steps 5.4, 5.5 and 5.7 (the state vector now holds the global velocities), section 4, item 6, the flowchart and the architecture note.
 
 **Checked:**
 - **Coasting while spinning, no force** (`tests/frame_fix_check.py`, friction and rolling resistance off, 1 m/s forward at 3 rad/s for 2 s):
@@ -134,7 +141,7 @@ $$\dot x_r = \dot x_g\cos\theta + \dot y_g\sin\theta, \qquad \dot y_r = -\dot x_
 **How:**
 - **Wheel positions:** R_b·(cos β_i, sin β_i), with β = [α_f, 180° − α_f, 180° + α_b, 360° − α_b].
 - **Drive arrows:** the rows of the plant's own **H**, so the figure shows what the model actually uses.
-- **Source:** it is the figure from `RobotSimulationOpenLoopModel_ClaudeReference.ipynb` (cell `hc000004`), relabelled with Dana's symbols (θ for heading).
+- **Source:** it is the figure from `archive/continuous_time/RobotSimulationOpenLoopModel_ClaudeReference.ipynb` (cell `hc000004`), relabelled with Dana's symbols (θ for heading).
 
 **Text:** cell `6c52e30a` keeps Dana's heading and her wheel notes as text:
 - the global and local frames;
@@ -147,220 +154,107 @@ $$\dot x_r = \dot x_g\cos\theta + \dot y_g\sin\theta, \qquad \dot y_r = -\dot x_
 
 ---
 
-## 4. Motor constants from Rustware and the Simovr firmware (`robot_constants.py`, not committed yet)
+## 4. Motor constants (not committed yet)
 
-**What:** the motor-driver values in `robot_constants.py` now come from the robot's own software and the motor-driver firmware, instead of placeholders.
+**What the model uses:** since entry 8, Dana's Pololu 37D 30:1 gearmotor, typed into the notebook's parameter cell: R = 2.18 Ω, $L_m$ = 2.3 mH, $K_t = K_b$ = 0.255 (at the wheel, so the gear ratio is included), and the reflected rotor inertia $J_w$ = 0.00018 kg·m². The robot's geometry, mass, CoG and floor friction still come from `robot_constants.py`. (Henry, 2026-10-28: later, all constants will move into the notebook.)
 
-| Constant | Before | Now | Source |
-|---|---|---|---|
-| `VEL_P_GAIN` | 0.1 | 0.196 A per rad/s | Rustware `VEL_P_GAIN` = 0.00015 A per (tick/s), × 8192/(2π) ticks per rad |
-| `VEL_I_GAIN` | 1 | 19.6 A per rad | Rustware `VEL_I_GAIN` = 0.015 A per tick, × 8192/(2π) |
-| `IQ_LIMIT` | 5 A | 20 A (FOC q-axis current) | Rustware `IQ_LIMIT` |
-| `MOTOR_CURRENT_LIMIT` | — | 17.3 A | `IQ_LIMIT` × √3/2: the same limit as DC-equivalent current (see change 7) |
-| `ENCODER_TICKS_PER_REV` | — | 8192 | firmware `SENSOR_COMMON_RES_TICKS`; Rustware scales wheel speeds with the same 8192 |
-| `PWM_FREQ_HZ` | — | 20000 | firmware `config.h`: rate of the current and velocity loops |
-| `CURRENT_BANDWIDTH` | — | 2000 (used as rad/s, about 320 Hz) | firmware default; Rustware does not change it |
-| `CURRENT_P_GAIN`, `CURRENT_I_GAIN` | — | bandwidth × L, bandwidth × R | firmware `controller_update_I_gains` |
-| `PWM_LIMIT` | — | 0.8 | firmware `config.h` |
-| `INTEGRATOR_DECAY` | — | 0.995 per period while limited | firmware `config.h` |
-| `CURRENT_FILTER_GAIN` | — | 0.3 per period | firmware default `I_k` |
-
-**Why:**
-- Rustware's gains are in the firmware's units, encoder ticks. The firmware's velocity loop computes `Iq_setpoint = p_gain × (error in tick/s) + integrator`, with `integrator += i_gain × (error in tick/s) × dt`, so the units are A per (tick/s) and A per tick.
-- The models use rad/s, so the gains are converted with 8192 ticks per revolution. The wheels are direct drive.
-- The old values 0.1 and 1 were placeholders. The real proportional gain is about 2× larger and the integral gain about 20× larger.
-
-**Motor R and L stay line-to-line** (0.24 Ω, 0.133 mH, from a SimpleFOC forum measurement of a 5010 360 KV motor). They go with K_t = K_b = 60/(2π·KV): a DC-equivalent motor model. The note in the file explains why they are not halved. Phase values belong to the FOC frame, where K_t ≈ 8.27/KV, and mixing phase R with this K_t would make the motor √2 stronger than measured.
-
-**Effect on Henry's `robot_model_voltage` and `robot_model_current`:**
-- Their velocity servo now uses the real gains and the 20 A limit.
-- It runs once per 10 ms, which is unstable with these gains while a wheel slips: the proportional loop on the rim alone has a rate of about 313 /s. It needs a faster servo step before those notebooks are rerun.
+**Our BLDC motor stays in `robot_constants.py`, not used by this model:** `MOTOR_RESISTANCE`, `MOTOR_INDUCTANCE` and `MOTOR_KT`, a DC-equivalent model of the robot's 5010 360 KV BLDC, kept for the BLDC model planned for December. R and L there are line-to-line (0.24 Ω, 0.133 mH, from a SimpleFOC forum measurement of a 5010 360 KV motor), going with K_t = K_b = 60/(2π·KV); the note in the file explains why they are not halved. The Rustware velocity gains and the Simovr firmware's current-loop values, with their sources, are in `archive/bldc_current_loop/bldc_current_loop_notes.md`.
 
 ---
 
-## 5. One implicit solver for the whole model (Radau each step, not committed yet)
+## 5. Backward Euler for the motor current, wheel speed and LuGre bristles (not committed yet)
 
-**What:** every state is now integrated together over each 1 ms step by the implicit adaptive solver Radau (SciPy `solve_ivp`). Before, the model updated the current, chassis and pose with Forward Euler, and used Radau only for the wheels and bristles. The states are:
-- motor currents;
-- driver estimates and integrators;
-- wheel speeds;
-- bristle loads;
-- chassis velocities;
-- pose;
-- the lagged accelerations behind the load transfer.
+**What:** Dana's model is a discrete-time map at $dt$ = 1 ms, with Forward Euler for every state. Her discrete step stays. The motor current, wheel speed and LuGre bristle state of each wheel now use **backward (implicit) Euler**: $\frac{dx}{dt} \approx \frac{x_{k+1} - x_k}{dt}$, with the right-hand side at step $k+1$.
+- With the Stribeck coefficient and the bristle damping fixed, the new current, the new bristle state and the floor force are all linear in the new wheel speed. So each wheel's torque balance is one linear equation for $\omega_{k+1}$.
+- The Stribeck coefficient and the damping depend on the new slip, so the solve is repeated with them updated at the new slip. It stops when the slip changes by less than `implicit_tol` = 0.1 mm/s, or after `implicit_max_iter` = 50 solves.
+- **Unchanged from Dana:** the chassis velocity and pose use her Forward Euler, in her order (velocity from the new floor forces, then position from the new velocity), in the world frame of change 2. The load transfer uses the previous step's acceleration, and the load torque is the step's own value, $T_{load} = F_{k+1} r + T_{roll,k}$.
 
-The current commands and the disturbance draws are held over the step.
+**Why:** both of these are faster than a 1 ms step, so Forward Euler at 1 ms doesn't work on them:
+- **The LuGre bristles** (change 7). At δ = 2 µm they are stiff: against a wheel's 18.5 g rim-equivalent mass they ring at about $1.4\cdot10^4$ rad/s. Forward Euler at 1 ms is unstable on them.
+- **Our motor's current.** $L_m/R$ = 0.55 ms is shorter than the step, so Forward Euler flips the current's sign each step (a factor of −0.8).
 
-**Why:** Henry asked for an implicit solver instead of Euler, so the model does not lose information between steps. Before this change, within each step:
-- the back-EMF used the step-start wheel speed;
-- the torque used the step-start current;
-- the chassis advanced with one averaged force;
-- the pose advanced with one Euler update at the step-start heading.
+Backward Euler is stable at any step size, so Dana's 1 ms step can stay. Dana also asked for a discrete LuGre, for runtime with a 40–50 Hz controller.
 
-Now every coupling acts continuously, inside the solver.
+**Equations:** spec section 5, in Dana's layout:
+- **Step 5.1:** the backward-Euler current, $i_{k+1} = \left(\frac{L_m}{dt} i_k + V_k - K_b \omega_{k+1}\right) / \left(\frac{L_m}{dt} + R\right)$.
+- **Step 5.2:** the normal loads from $a_{x,r,k-1}, a_{y,r,k-1}$.
+- **Step 5.3:** the slip $v_{s,k+1} = v_{i,k} - r\,\omega_{k+1}$, and the backward-Euler bristles and floor force.
+- **Steps 5.4–5.5:** Dana's Forward Euler chassis and pose update, in the world frame.
+- **Step 5.6:** the backward-Euler wheel torque balance and the repeated solve.
+- **Step 5.7:** the step as a whole, $\mathbf x_{k+1} = f(\mathbf x_k, \mathbf V_k)$.
 
-**Equations (spec section 5, now rates):** each step gives the rate of change of its states, in Dana's layout. A new Step 5.7 describes the integration.
-- **Driver (Step 5.1):** written as a continuous loop. The firmware runs it at 20 kHz, about 30× faster than its 2000 rad/s bandwidth.
-  - The per-period filter gain κ and decay γ become rates: λ_f = −ln(1−κ)·f_pwm and λ_γ = −ln(γ)·f_pwm.
-  - The anti-windup switch is smoothed over ε_V = 0.05 V (`anti_windup_width`), so the solver does not stall on it.
-- **Load transfer (Step 5.2):** uses lagged accelerations ã_x, ã_y that follow the chassis accelerations with a time constant of one step (τ = dt). This is the continuous counterpart of Dana's "previous step's acceleration", and it keeps the loads free of an algebraic loop.
-- **Chassis and pose (Steps 5.4–5.5):** dv/dt = M⁻¹Hᵀ F and dx_g/dt = R(θ)·v, Dana's equations as rates.
-- **Outputs:** T_load, the applied voltage and the battery current are step averages, from integrals carried by the solver.
+**Code changes (cell `ebf0a37d`):**
+- **`compute_electrical_subsystem(I, V_cmd)`:** returns the new current as $c_I + k_I\,\omega_{k+1}$.
+- **`lugre_coefficients`** (was `lugre_contact`): the Stribeck coefficient, static limit and bristle damping at a given slip speed.
+- **`compute_contact_friction_interface(...)`:** returns the new bristle state and floor force as linear forms in $\omega_{k+1}$, and the rolling resistance.
+- **`advance_chassis_kinetics(F_floor, state)`:** the new accelerations, global velocities and pose, in Dana's order.
+- **`step`:**
+  - solves each wheel's balance, repeating until the slip settles, and keeps the count in `last_iterations`;
+  - then advances the chassis;
+  - sets the slip flags from the slip the bristles saw over the step.
+- **Parameter cell:** `implicit_tol` and `implicit_max_iter` added.
 
-**Code changes (cell `ebf0a37d`):** Dana's method names stay, but each now returns rates:
-- `compute_electrical_subsystem`
-- `compute_dynamic_normal_forces`
-- `compute_contact_friction_interface`
-- `advance_chassis_kinetics`
+**Text changes:** spec sections 2, 4 and 5, the flowchart's electrical, contact and re-coupling boxes, and the architecture note.
 
-A new `rates` combines them. `step` draws the disturbances, calls Radau once, and stores the solver's internal step sizes in `last_steps` and its evaluation count in `last_nfev`, so the step size can be tracked over time. The parameter cell gains `anti_windup_width`.
+**Checked** against the same model at a 10× finer step (dt = 0.1 ms), on Dana's tests at her voltages (`'proper'` design, noise off):
 
-**Checked:**
-- **Continuous driver vs the exact discrete firmware loop** (`tests/driver_continuous_check.py`, motor only): median current difference 0.0003 A, largest 0.25 A in the first 50 µs of a step. Radau also handles the voltage limit and the current reversal.
-- **Whole model vs the previous version** (Dana's manoeuvres, noise off):
-
-| Test | End speed, new vs before | Path difference | Heading, new vs before | Solver steps per 1 ms (median) |
+| Test | Path difference, 1 ms vs 0.1 ms | End heading, 0.1 ms vs 1 ms | Time slipping per wheel | Run time at 1 ms |
 |---|---|---|---|---|
-| 2 A forward | 2.764 vs 2.764 m/s | 0.4 mm | 0 vs 0° | 2 |
-| 2 A strafe | 2.142 vs 2.141 m/s | 2.8 mm | +61.4 vs +61.7° | 2 |
-| 2 A rotation | 0.381 vs 0.382 m/s | 0.2 mm | +3999.5 vs +4004.8° | 3 |
-| 5 A forward | 5.220 vs 5.217 m/s | 2.8 mm | 0 vs 0° | 3 |
-| 4 A forward / back / coast | 0.497 vs 0.502 m/s | 8.4 mm | 0 vs 0° | 3 |
+| 45/45 2 V forward | 2.6 mm | 0 vs 0° | identical | 0.22 s |
+| 45/45 2 V strafe | 2.6 mm | 0 vs 0° | identical | 0.20 s |
+| 45/45 2 V rotation | 0.0 mm | +2183 vs +2184° | identical | 0.11 s |
+| 30/45 2 V strafe | 0.6 mm | −1171 vs −1173° | identical | 0.32 s |
+| 30/45 5 V forward | 0.7 mm | 0 vs 0° | identical | 0.12 s |
+| 30/45 5 V strafe | 1.1 mm | −1241 vs −1241° | identical | 0.08 s |
+| 30/45 ±4 V side-to-side | 35 mm | +1085 vs +1073° | identical | 0.24 s |
 
-  The solver takes 16–23 evaluations per 1 ms step. It uses smaller internal steps only at events, such as a wheel breaking loose or a current reversing.
-- **Run time:** about 2× the previous version, roughly 4× slower than real time for these tests.
-- **Full notebook:** runs without errors in 455 s (211 s before).
+- **The reference has settled:** 0.1 ms and 0.01 ms agree to within 0.1–0.3 mm.
+- **The side-to-side difference is the largest** because that robot spins about three turns, which magnifies any small difference.
+- **The remaining difference is the 1 ms step, not the solve tolerance.** Against a 0.01 ms reference, the 2 V forward run is 2.9 mm off at `implicit_tol` 0.1 mm/s and 3.0 mm at 0.01, 0.001 and 0.0001 mm/s; the error halves with the step (1.5 mm at 0.5 ms, 0.6 mm at 0.2 ms), as backward Euler's should. Tighter tolerances only cost solves (mean 4 → 11 per step, and over 50 at the worst steps), so the tolerance stays at 0.1 mm/s, the same as LuGre's creep slip.
+- **Solves per step:** median 1–5. A wheel breaking loose takes up to about 40.
+- **One solve per step is not enough.** With the Stribeck coefficient lagging a step, wheels broke loose late or not at all, and paths were off by 0.25–3 m. Repeating the solve until the slip settles is what makes it match.
+- **Apparent slip of a gripping wheel.** Within a step, the wheel solve holds the chassis velocity of step $k$. Measured against the *new* chassis velocity, a gripping wheel therefore appears to slip by about one step's acceleration × dt: 1.6 mm/s at 1.6 m/s². The bristles don't see this, so the slip flags use the slip they saw.
+- **Full notebook:** runs without errors in 12 s.
 
 **Left as it is (for Henry and Dana):**
-- **Run time.** Telling Radau which states affect which (its Jacobian sparsity) would cut the evaluations needed to build each Jacobian.
-- **The LuGre constants stay as in change 8** (δ = 2 µm, ζ = 1, fade at 5 mm/s), decided by Henry; see the decision note under change 8.
+- **The chassis is held during the wheel solve** (semi-implicit). That's the one-step lag in the gripping slip above. It changes the paths by a few mm.
+  - **Decision (Henry, 2026-10-27): keep the two rules** — backward Euler for the current, wheel speed and bristles, Dana's Forward Euler for the chassis and pose — so the position updates stay exactly Dana's. The alternative, backward Euler for the chassis too, would solve all four wheels and the chassis together each step and change her chassis equations, for a few mm.
+- **The LuGre constants stay as in change 7** (δ = 2 µm, ζ = 1, fade at 5 mm/s).
+  - δ from 0.5 to 5 µm gives the same results.
+  - From 10 µm up, wheels that should grip break loose, unless the damping is retuned (`tests/lugre_stiffness_choice.py`).
 
 ---
 
-## 6. Mechanical-design toggle and the centre-of-mass position (not committed yet)
+## 6. Centre-of-mass position and height as parameters (not committed yet)
 
-**What:** a switch, `MECHANICAL_DESIGN`, in the parameter cell (`21f5c2d7`), and a new parameter `cog_y`: the centre of mass (CoG) position forward of the base centre. The chassis motion is now measured about the CoG, so the yaw levers in $H$ and the front/rear load split are taken from it.
+**What:** two parameters in the parameter cell (`21f5c2d7`), set independently and both from `robot_constants.py`:
+- `COG_Y_MM`: the centre of mass (CoG) forward of the base centre. **0 for now (centred)**; the CAD value is `rc.COG_Y_MM` = 10.2 mm.
+- `COG_Z_MM`: the CoG height, the CAD value `rc.COG_Z_MM` = 61.1 mm (the height Dana uses).
 
-| | `'built'` (default) | `'proper'` |
-|---|---|---|
-| `cog_y` | +10.2 mm (CAD, `COG_Y_MM`) | 0 (the robot's centre) |
-| `Jzz` | 0.007444 kg·m², CAD yaw inertia about the CoG (`IZZ_COG_KG_MM2`) | the same |
-| `h` | 61.1 mm (CAD, `COG_Z_MM`) | 31.8 mm: Dana's proportion, h = 0.33 × wheelbase (her 0.08 / (0.20·(sin 30° + sin 45°))); ours is 0.64 |
-| Yaw levers, front / rear | 74.4 / 86.7 mm | 79.5 / 79.5 mm (= R_b) |
-| Static loads, front / rear wheel | 9.16 / 4.07 N | 7.75 / 5.48 N |
-
-Mass, wheels, motors and friction are the same in both.
+`Jzz` is the CAD yaw inertia about the CoG, `rc.IZZ_COG_KG_MM2` = 0.007444 kg·m², wherever the CoG sits.
 
 **Why:**
-- Henry asked for a toggle between our robot as built and a better-proportioned design. "Proper" is defined by symmetry and loading, not by absolute values: the CoG over the robot's centre, and a CoG at Dana's (lower) relative height. Henry chose the robot's centre over the centroid of the wheel contacts. With the 30/45 layout the centroid sits 8.2 mm behind the centre; it would equalise the static loads but make the yaw levers unequal (83.6 vs 73.7 mm).
-- The built robot's CoG is not at its centre: CAD puts it 10.2 mm forward (and 0.6 mm sideways, which is ignored). Dana's model assumed it was at the centre.
+- The chassis motion is measured about the CoG, with the diagonal mass matrix diag($M_r$, $M_r$, $J_{zz}$), so $J_{zz}$ must be the inertia about the CoG. Dana's 0.007726 kg·m² is the same CAD inertia moved to the base centre with the parallel-axis theorem for the CAD offset; with the CoG centred, the consistent value is 0.007444 (4 % lower).
+- The CoG offset changes each wheel's yaw lever and the front/rear load split, so it stays a parameter to try later (Henry: "we can arbitrarily change this later").
+- Height and offset are independent: changing one never changes the other (Henry, 2026-10-28).
 
-**The inertia:** the CAD value, 7443.681 kg·mm², is already about the CoG. Because the model now measures the motion about the CoG, with the diagonal mass matrix diag(M_r, M_r, J_zz), J_zz is that value directly, with no parallel-axis term. `ROBOT_INERTIA` (0.007726 kg·m²) is the same inertia moved to the base centre with the parallel-axis theorem; it belongs with a model that measures about the base centre and has the coupled mass matrix (Henry's main model), so this model no longer uses it. Before this change, the built design used 0.007726 with the CoG at the centre.
-
-**Equations (spec section 3 and Step 5.2, in Dana's layout):**
-
-Each wheel's yaw lever about the CoG is $R_b - y_{cg}\sin\beta_i$:
+**Equations (spec sections 3 and 4):** each wheel's yaw lever about the CoG is $R_b - y_{cg}\sin\beta_i$:
 
 $$\mathbf{H} = \begin{bmatrix} -\sin\alpha_f & \cos\alpha_f & R_b - y_{cg}\sin\alpha_f \\ -\sin\alpha_f & -\cos\alpha_f & R_b - y_{cg}\sin\alpha_f \\ \sin\alpha_b & -\cos\alpha_b & R_b + y_{cg}\sin\alpha_b \\ \sin\alpha_b & \cos\alpha_b & R_b + y_{cg}\sin\alpha_b \end{bmatrix}$$
 
-The load split uses the axle distances from the CoG, $y_{f,cg} = y_f - y_{cg}$ and $y_{b,cg} = y_b + y_{cg}$, in place of $y_f$ and $y_b$:
+and the load split uses the axle distances from the CoG, $y_{f,cg} = y_f - y_{cg}$ and $y_{b,cg} = y_b + y_{cg}$, in place of $y_f$ and $y_b$. With $y_{cg} = 0$ both reduce to Dana's equations exactly.
 
-$$F_{n,1} = \frac{M_r g\, y_{b,cg}}{2L} - \frac{M_r a_y h}{2L} - \frac{x_f}{\Sigma X^2}\frac{M_r a_x h\, y_{b,cg}}{L}$$
+**Code:** `__init__` sets `y_f_cg` and `y_b_cg`; `_build_kinematics_matrix` uses the levers above; `compute_dynamic_normal_forces` uses the CoG distances.
 
-(wheels 2–4 the same way). $L = y_f + y_b$ is unchanged, and the four loads still sum to the robot's weight.
+**Earlier version, replaced:** a `MECHANICAL_DESIGN` switch between `'built'` (CAD CoG 10.2 mm forward, CAD height) and `'proper'` (CoG centred, h = 31.8 mm). Removed in the merge with Dana's v3 (entry 8).
 
-**Code changes:**
-- Class cell `ebf0a37d`: `__init__` sets `self.y_f_cg` and `self.y_b_cg`; the third column of $H$ uses `Rb - c*sin(af)` and `Rb + c*sin(ab)`; `compute_dynamic_normal_forces` uses the CoG distances.
-- Parameter cell `21f5c2d7`: `MECHANICAL_DESIGN`, the `_DESIGNS` table, `'cog_y'` in `simulation_parameters`, and the design name in the printed report. The comment above it explains both designs and why there is no parallel-axis term.
-
-**Text:** spec section 1 (lists $y_{cg}$), section 3 (the levers, and $J_{zz}$ about the CoG), Step 5.2 (the CoG distances), and cell `e6b1eaeb` (what the switch does).
-
-**Checked** (noise off, 1.5 s; `tests/design_toggle_compare.py`):
-- **cog_y = 0 reproduces the previous model exactly** (0.0 mm on all of Dana's manoeuvres, `tests/compare_solver_versions.py`).
-
-| Test | built | proper |
-|---|---|---|
-| 45/45, 2 A strafe | yaws: +335°, 6.2 rad/s at the end | straight: 1.87 m, 0° |
-| 30/45, 2 A strafe | spins: +275°, 5.6 rad/s, 0.68 m/s | heading +53°, 2.05 m/s (as with the CoG at the centre) |
-| 30/45, 5 A strafe | spins out, both rear wheels slipping | spins out, rear-right wheel slipping |
-| 30/45, 5 A forward | no slip, 7.33 m/s | no slip, 7.33 m/s |
-
-- **The built robot yaws on a strafe even with the symmetric 45/45 layout.** That is the physics of a CoG ahead of the centre: with equal currents, the front and rear sideways forces act on unequal levers about the CoG, so they leave a net yaw moment. The open-loop real robot would do the same; the controller has to correct it.
-- **The extra front load helps going forward:** at 5 A forward the front wheels no longer slip (they slipped the whole run with the CoG at the centre, at 5.22 m/s).
-- **The 5 A strafe spins out in both designs.** Halving the CoG height does not stop the rear-right wheel losing grip, so this is not just a matter of the built robot's proportions.
-- **Full notebook (built):** runs without errors in 638 s.
+**For reference, with the CAD offset (`COG_Y_MM` = 10.2 mm):** yaw levers 74.4 mm front and 86.7 mm rear (79.5 mm each when centred), static loads 9.16 N front and 4.07 N rear wheel (7.75 / 5.48 N when centred). On the old BLDC constants this made even the symmetric 45/45 strafe yaw, because equal sideways forces then act on unequal levers about the CoG.
 
 ---
 
-## 7. Current-command input through the Simovr current loop (not committed yet)
+## 7. LuGre floor friction and smoothed rolling resistance (commit `41bd17d`)
 
-**What:** the model's input is now a current command per motor, not a voltage. As on the robot, the Simovr motor driver (Tinymovr firmware) turns the current error into the voltage it applies, and Dana's electrical equation then sets the actual current. A voltage command is still accepted, applied straight to the motor terminals as in Dana's model, and Dana's tests use it.
-
-**Why:** Henry asked for the more realistic input. The robot's drivers are current-controlled (FOC); the controller sends current, and the voltage follows. Decided with Henry:
-- current command input;
-- the firmware's default current-loop bandwidth;
-- 20 A per motor.
-
-**Equations (spec Step 5.1, in Dana's layout).** Each 1 ms step holds n = dt·f_pwm = 20 driver periods, with the wheel speeds held at step k, as Dana's back-EMF already does. Each period, in the firmware's order:
-
-$$i_{set} = \text{clip}(i_{cmd}, \pm I_{max}), \qquad \hat i \leftarrow \hat i + \kappa (i - \hat i), \qquad e = i_{set} - \hat i$$
-
-$$x_I \leftarrow x_I + T_{pwm} K_i e, \qquad V = \text{clip}(K_p e + x_I, \pm \eta V_{bus}), \qquad K_p = \omega_c L_m, \; K_i = \omega_c R$$
-
-$$i \leftarrow i + \frac{T_{pwm}}{L_m}\left(V - R i - K_b \omega_k\right)$$
-
-- While V is limited, the integrator is multiplied by γ each period.
-- The torque is still K_t·I_k, Dana's convention.
-- The applied voltage V_a and the battery current I_bus = Σ V·i / V_bus are reported as averages over the step.
-
-**Code changes:**
-- **Cell `ebf0a37d`:**
-  - `OmniMotorState`: new states `I_est` and `x_I`, and new outputs `V_applied` and `I_bus`.
-  - `__init__`: the gains `Kp_I` and `Ki_I`, and `n_pwm`, with a check that dt is a whole number of driver periods.
-  - `compute_electrical_subsystem(state, I_cmd)`: rewritten as the driver loop above.
-  - `step(state, I_cmd)`: carries the new states and outputs forward.
-- **Parameter cell:** the driver settings, taken from `robot_constants.py`.
-
-**Current limit: 17.3 A, not 20 A.** The Simovr limits its FOC q-axis current to 20 A (`IQ_LIMIT`). This model's current is DC-equivalent, so the clamp is `MOTOR_CURRENT_LIMIT` = (√3/2) × 20 = 17.3 A. Two independent checks give the same factor:
-- **Equal torque:** K_t,FOC = (√3/2)·K_t,DC (8.27/KV vs 9.55/KV).
-- **Equal copper heat:** R_LL·i² = 1.5·R_phase·I_q² = 0.75·R_LL·I_q².
-
-Dana's tests command voltages, which bypass the driver, so this limit does not apply to them.
-
-**Voltage input, for Dana's tests.** `step(state, V_cmd=V)` applies V straight to the motor terminals, limited to 0.8 × V_bus, with the driver bypassed and its states held; `step(state, I_cmd=I)` goes through the driver. Exactly one must be given.
-- **Why:** Dana's tests command voltages, and a voltage is not a current: under voltage drive the current falls as the wheel speeds up (back-EMF), so a slipping wheel loses torque, while a current command keeps pushing. Comparing her voltage tests with current commands of the same numbers compares different tests (Henry).
-- **First version, corrected:** the tests had been converted to current commands with the same numbers (2 A, 5 A, ±4 A). That was wrong; they are back on Dana's voltages, 2 V, 5 V and ±4 V. Her test cells are restored exactly, except that each call is `step(state, V_cmd=...)`; her test text is restored with the axis changes of change 1 kept.
-- **Unchanged for the controller:** the current command is still the input the controller uses. With a current command, the results are identical to before (0.0 mm).
-- **Checked:** with a voltage command the driver applies exactly the commanded voltage (±5.000 V) and its states stay at zero. The full notebook runs without errors in 324 s (`'proper'` design). On our motor (R = 0.24 Ω) Dana's voltages are strong: in the 45/45 2 V forward test the front wheels slip until about 0.4 s and then grip again as the back-EMF cuts their current; the 30/45 2 V and 5 V strafes spin (about −19 and −29 rad/s at 1.5 s).
-
-**Text changes:**
-- Spec sections 1 and 2: driver parameters, states and outputs, and the two inputs.
-- Spec section 4: flow items 1 and 2.
-- Spec Step 5.1: rewritten, with the voltage-command bypass.
-- The flowchart's inputs and electrical box, the architecture note and the configuration note. The test descriptions are Dana's again (voltage).
-
-**Checked:**
-
-*Driver on its own:* see `tests/motor_only2.py`. At the default bandwidth the current reaches 90% of a step in 0.8 ms with no overshoot.
-
-*Link to Dana's voltage model:* Dana's voltage-driven model was run with her test voltages, and the currents it produced were fed as commands to this model.
-- **2 V tests** (forward, strafe, rotation): the driver applies Dana's voltage to a median of 0.003–0.009 V. The robot paths agree to within 1.5 mm forward and 0.1 mm in rotation, and to within 72 mm in the spinning strafe.
-- **5 V forward and 4 V multi-stage:** the currents match exactly and the robot motion agrees to within 4–25 mm, but the applied voltage sits about 0.6–1 V lower. The wheels slide there.
-  - Dana's 1 ms forward-Euler current update overshoots on its first step: at 5 V it jumps to (Δt/L)·V = 37.6 A, where the real circuit reaches about 17 A.
-  - The sliding wheels keep that extra spin, about 40 rad/s, because sliding friction does not depend on wheel speed. That speed difference is the 1 V of back-EMF.
-
-*Full notebook:* runs without errors in 211 s.
-
-**Left as it is (for Henry and Dana):**
-- **The 0.8 × V_bus voltage limit** is the firmware's `PWM_LIMIT` (largest modulation, 80%). The firmware gives no reason. The usual one is leaving time in each PWM period for low-side current sensing and dead time. How it maps onto this DC-equivalent model depends on the firmware's modulation scaling, which was not confirmed.
-- **The driver used the wheel speed from step k for the back-EMF**, Dana's convention, so it lagged the wheel by up to 1 ms. Change 5 removes this.
-- **The friction is unchanged:** it is still the LuGre setup of change 8.
-
----
-
-## 8. LuGre floor friction and smoothed rolling resistance (commit `41bd17d`)
-
-**What:** Dana's stick/slip switch is replaced by Henry's LuGre friction model, with his parameters from `robot_model_voltage.ipynb` on `main`. Rolling resistance is smoothed through zero wheel speed.
+**What:** Dana's stick/slip switch is replaced by Henry's LuGre friction model, with his parameters from `robot_model_voltage.ipynb` (now in `archive/continuous_time/`). Rolling resistance is smoothed through zero wheel speed.
 
 **Why:**
 - With the real constants, Dana's friction chattered between grip and slip at every step. A wheel re-gripped as soon as its requested force fell below $\mu_s N$, and its speed then snapped to the rolling speed, even while it was spinning the wrong way.
@@ -402,30 +296,21 @@ How to read it:
 | `lugre_creep` | 1e-4 m/s | $v_c$, smooths $\lvert v_s \rvert$ at zero slip | `LUGRE_CREEP_SLIP` (main) |
 | `slip_band` | 5e-3 m/s | slip flag threshold (diagnostic only) | `rc.DRIVE_BREAKAWAY_BAND` |
 | `roll_smoothing` | 0.5 rad/s | $\varepsilon$ in $\tanh(\omega/\varepsilon)$ | `rc.WHEEL_LOSS_SMOOTHING_SPEED` |
-| `rtol` | 1e-4 | implicit solver tolerance | `LUGRE_RTOL` (main) |
 
-None of the LuGre values are measured; they are Henry's tuned choices (see `friction_model_plan.md`, section 7).
+None of the LuGre values are measured; they are Henry's tuned choices (see `archive/continuous_time/friction_model_plan.md`, section 7).
 
 ### Integration
 
-At $\delta$ = 2 µm the bristles are very stiff: about $3.5\cdot10^6$ N/m against the rim mass $J_w/r^2 \approx 0.019$ kg, which is about $1.4\cdot10^4$ rad/s. Dana's 1 ms Forward Euler step would be unstable. As Henry chose, within each 1 ms step:
-- The wheel speeds, bristle loads and chassis velocity are integrated together with an implicit solver (`scipy.integrate.solve_ivp`, Radau, rtol 1e-4).
-- The motor torques, normal forces and friction coefficients are held at their step-$k$ values.
-
-Dana's 1 ms discrete map is otherwise unchanged:
-- The current, normal loads and noise are still updated once per step.
-- `advance_chassis_kinetics` is unchanged. It receives the floor force averaged over the step, so its Forward Euler update gives exactly the solver's chassis velocity.
+At $\delta$ = 2 µm the bristles are very stiff: about $3.5\cdot10^6$ N/m against the rim mass $J_w/r^2 \approx 0.019$ kg, which is about $1.4\cdot10^4$ rad/s. Dana's 1 ms Forward Euler step would be unstable on them, so they use backward Euler (change 5).
 
 ### Code changes (cell `ebf0a37d`)
 
 - `OmniMotorState`: new state `self.z` (bristle loads, 4).
 - `__init__`: `self.m_rim = Jw / r**2`.
-- New `lugre_contact(slip, z, F_n, mu_s, mu_k)`: returns the floor force and $\dot z$.
+- New `lugre_coefficients(slip, F_n, mu_s, mu_k)`: the Stribeck coefficient, static limit and bristle damping.
 - `compute_contact_friction_interface`:
-  - Rewritten: the same friction noise $w_\mu$, then the implicit integration over the step.
-  - Returns the step-average `F_floor` and `T_load`, the slip flags, and `omega_next`, `z_next`.
-- `step`: the Condition A/B wheel-speed block is replaced by storing `omega_next` and `z_next`.
-- `from scipy.integrate import solve_ivp`.
+  - Rewritten for LuGre, with the same friction noise $w_\mu$; its backward-Euler form is in change 5.
+- `step`: the Condition A/B wheel-speed block is replaced by one torque balance for every wheel.
 
 ### Text changes
 
@@ -433,7 +318,6 @@ Dana's 1 ms discrete map is otherwise unchanged:
 - Section 2: new state $\mathbf Z_k$.
 - Section 4: flow items 4 and 8.
 - Step 5.3: rewritten for LuGre.
-- Step 5.4: the integration over the step, and the average force.
 - Step 5.6: one torque balance for every wheel.
 - Phase 3: disturbances in the new law.
 - Flowchart: the contact box; the stick/slip decision diamond is removed.
@@ -459,7 +343,7 @@ Why the braking differs:
 - The wheels slide through the whole drive phase at close to free speed, and the robot accelerates at about 3.2 m/s² (sliding limit). With Dana's friction it reached 4.2 m/s instead of 3.2 m/s.
 - The coast phase decays smoothly.
 
-**Full notebook:** runs without errors in 206 s. A single 1.5 s run takes about 5.7 s, against 0.1 s with Dana's friction.
+**Full notebook:** runs without errors in 12 s (with change 5). A single 1.5 s run takes 0.1–0.3 s.
 
 ### Left as it is (for Henry and Dana to decide)
 
@@ -469,12 +353,39 @@ Why the braking differs:
   
   LuGre doesn't produce those spikes.
 - **The noise ($w_F$, $w_\mu$) is still inside the model class.** The agreed plan is to move disturbances to the simulation layer.
-- **Run time.** A faster option is still possible if needed, for example a fixed-step implicit update.
 
 **Later tests (2026-10-27, `tests/`):** these LuGre constants (δ = 2 µm, ζ = 1, damping fading above 5 mm/s) are stiff. A softer set was also tested (δ = 30 µm, ζ = 3, fade at 50 mm/s).
 
 **Decision (Henry, 2026-10-27): keep δ = 2 µm.**
-- With the implicit solver (change 5), both sets cost the same to solve and give the same robot behaviour (`tests/lugre_constants_robot.py`): paths within 3 mm, and the front wheels break away at 4.38 A vs 4.35 A on a slow current ramp.
+- Both sets give the same robot behaviour (`tests/lugre_constants_robot.py`): paths within 3 mm, and the front wheels break away at 4.38 A vs 4.35 A on a slow current ramp.
 - 2 µm is the closest to Coulomb–Stribeck friction through slip reversals: the force changes sign 10–32 mm/s past zero slip, against 32–95 mm/s at 20 µm.
 - It reproduces most closely the friction law of Henry's main model. That is the Coulomb/Stribeck "Williams kinetic law" (the Williams-style force law in `williams_model.py`), with μ_d(v) = μ_k + (μ_s − μ_k)·e^(−α_d |v|) from `MU_D_STAT`, `MU_D_DYN` and `ALPHA_D`. LuGre's steady sliding uses this same curve for every δ. The curve was checked against the code, not against the Williams paper itself.
 - The real contact's deflection is unmeasured.
+
+---
+
+## 8. Merged with Dana's v3 (not committed yet)
+
+**What:** Dana's `robot-simulation-open-loop-v3.ipynb` (her original plus LuGre, an exponential bristle update, the Pololu motor, supply limits and new tests) merged into the working copy, item by item as agreed with Henry (2026-10-28). Compared side by side first, with her constants in both (`tests/compare_dana_v3.py`, noise off).
+
+**Taken from Dana's v3:**
+- **Motor:** Pololu 37D 30:1, R = 2.18 Ω, $L_m$ = 2.3 mH, $K_t = K_b$ = 0.255, $J_w$ = 0.00018 kg·m² (entry 4).
+- **Supply voltage limit:** the applied voltage is clipped to ±`V_max` = 12 V and logged as `V_actual` (`OmniMotorState`, `step`).
+- **Tests:** her test cells exactly: Blocks 1–2 at 1 V for 0.5 s, Block 3 at 10 V ("BOOSTED VOLTAGE"), the multi-stage tests at ±4 V, and the plot title "Wheel Angular Velocities (LuGre Continuous Response)".
+- **Text:** her spec layout and wording, flowchart, architecture note, configuration note, test descriptions and frame diagram, with our equations where the model differs (below). Two corrections to her test description: forward is $+Y_r$ and the strafe goes right along $+X_r$ (entry 1), and the runs are 0.5 s, not 1.5 s.
+
+**Kept from ours** (Dana's v3 differs):
+- **Wheel–bristle step (entry 5):** her bristle state uses an exact exponential step with the slip held, and the wheel speed is then advanced with Forward Euler from that force. The stiff wheel–bristle loop therefore still runs explicitly (ω·dt ≈ 3.9 with her $J_w$): on her 1 V tests the gripping wheels' speed changes reverse direction on 55–92 % of steps and their slip reaches 62–97 mm/s. Ours solves current, wheel and bristles together with backward Euler: 0–1 % (10 % in one test) and 2–7 mm/s.
+- **Chassis in the world frame (entry 2):** her chassis still advances the local velocity, so a robot that moves while it turns follows a wrong, curved path.
+- **Load torque sign:** $T_{load} = r F + T_{roll}$, where F is the floor force on the robot (positive pushes it along the wheel's drive direction). Dana's v3 has $-rF + T_{roll}$, which flips F but not $T_{roll}$. Checked: driving forward at 1 V, wheel 1's floor force is positive, its motor torque +0.0179 N·m and its load torque +0.0162 N·m at 0.1 s (the difference is the torque accelerating the wheel), and both 0.0050 N·m once steady.
+- **$J_{zz}$ about the CoG, and the CoG offset and height as parameters (entry 6).**
+- **Constants from `robot_constants.py`** for geometry, mass, CoG and friction; the Pololu motor in the notebook (entry 4).
+- **The wheel-layout figure** (entry 3), now below her ASCII frame diagram.
+
+**Not taken: her `I_max` = 20 A current clip.** A voltage-driven brushed motor limits its own current through R: with the Pololu motor at 12 V, stall is 5.5 A, and about 11 A when reversing at full speed, which the real motor does draw. A clip in the plant would stand for a particular motor driver's protection, and none has been chosen (Henry, 2026-10-28). It can be added if a driver is picked.
+
+**Checked:**
+- **Side by side with her constants** (`tests/compare_dana_v3.py`): paths within 0.5–3.4 mm on her straight and gripping tests; 74 mm on the side-to-side and 197 mm on the 10 V strafe, which both spin (her wheel chatter and local-velocity chassis). Run time 0.9 s for all 12 tests, against 0.6 s for hers.
+- **Solves per step** with the Pololu motor: median 1, at most 6 (1 V forward).
+- **Supply limit:** a 30 V command is applied as 12 V.
+- **Full notebook:** runs without errors in 45 s, all 13 figures.

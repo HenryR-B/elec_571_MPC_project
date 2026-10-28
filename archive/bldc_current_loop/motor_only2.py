@@ -13,7 +13,7 @@ import sys
 import numpy as np
 from scipy.linalg import expm
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
-sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]))   # repository root
 import robot_constants as rc
 
 R, L, Kt = rc.MOTOR_RESISTANCE, rc.MOTOR_INDUCTANCE, rc.MOTOR_KT

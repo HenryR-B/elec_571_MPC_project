@@ -1,5 +1,5 @@
 """Compare two versions of the working notebook on Dana's manoeuvres (noise off): end speed, path, heading,
-run time, and the newer version's solver steps. Usage: python tests/compare_solver_versions.py OLD.ipynb NEW.ipynb"""
+run time, and the newer version's solves per step. Usage: python tests/compare_solver_versions.py OLD.ipynb NEW.ipynb"""
 import json, sys, time
 from pathlib import Path
 import numpy as np
@@ -16,14 +16,13 @@ dt = po["dt"]
 for name, T, fn in SCEN:
     n = int(round(T / dt)); out = {}
     for tag, g, p in (("old", go, po), ("new", gn, pn)):
-        sim, s = g["OmniRobotSimulation"](p), g["OmniMotorState"](); t0 = time.time(); path = []; steps = []; ev = 0
+        sim, s = g["OmniRobotSimulation"](p), g["OmniMotorState"](); t0 = time.time(); path = []; its = []
         for k in range(n):
             s, _, _ = sim.step(s, fn(k * dt)); path.append(s.pos_global.copy())
-            if tag == "new": steps.extend(sim.last_steps); ev += sim.last_nfev
-        out[tag] = (np.array(path), s, time.time() - t0, np.array(steps), ev)
-    po_, so, wo = out["old"][:3]; pn_, sn, wn, hs, ev = out["new"]
+            if tag == "new": its.append(sim.last_iterations)
+        out[tag] = (np.array(path), s, time.time() - t0, np.array(its))
+    po_, so, wo = out["old"][:3]; pn_, sn, wn, its = out["new"]
     dev = np.linalg.norm(pn_[:, :2] - po_[:, :2], axis=1).max()
     print(f"{name:24}: end speed new {np.hypot(*sn.v_local[:2]):.3f} vs old {np.hypot(*so.v_local[:2]):.3f} m/s, path difference "
           f"{1e3 * dev:6.1f} mm, heading {np.degrees(sn.pos_global[2]):+8.1f} vs {np.degrees(so.pos_global[2]):+8.1f} deg | wall new {wn:.1f} s "
-          f"(old {wo:.1f} s), solver steps per 1 ms: median {np.median(np.bincount(np.minimum((np.cumsum(hs) / dt).astype(int), n - 1))):.0f}, "
-          f"smallest step {1e6 * hs.min():.2f} us, {ev / n:.0f} evaluations per step", flush=True)
+          f"(old {wo:.1f} s), solves per step: median {np.median(its):.0f}, max {its.max()}", flush=True)

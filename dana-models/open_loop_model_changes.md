@@ -524,6 +524,8 @@ So the roller force always uses the velocity one step old. That is stable here b
 | `sigma_V` | `sigma_load` | it is a force noise in newtons, not a voltage |
 | `dt`, `Mr`, `Rb`, `r` and the other dictionary keys | `DT`, `ROBOT_MASS`, `WHEEL_ROBOT_DIST`, `WHEEL_RADIUS`, and so on | named constants, mostly from `robot_constants.py` |
 
+**Wheel solve:** the new current, bristle state and floor force are straight lines in the new wheel speed. `I_stalled`, `z_stalled` and `F_stalled` are their values if the wheel were stopped at the end of the step; `dI_domega`, `dz_domega` and `dF_domega` are the slopes.
+
 **Velocities, named as in `archive/williams/williams_model.py`:** `v_center` (wheel centre, no spin), `v_center_d` (`v_center` along $\mathbf d_i$, which is $\mathbf H \mathbf{\dot X}_r$), `v_contact` (contact point, `v_center - r omega d_hat`), `v_slip_d` and `v_slip_a` (`v_contact` along $\mathbf d_i$ and $\mathbf a_i$). One function, `slip_velocity`, returns both slips. The sign of the wheel term is the opposite of Williams': here a positive $\omega$ drives the robot along $+\mathbf d_i$.
 
 **Text:** the specification cell is unchanged except for two parameter names. The architecture and plant configuration cells describe the new functions and constants. The other text cells are the same as the working copy.
@@ -546,7 +548,6 @@ So the roller force always uses the velocity one step old. That is stable here b
 
 **Left as it is (for Henry and Dana):**
 - **It runs about 30 % slower** (plant steps of all cases: 7.3 s for the working copy, 9.5 s for the draft). `slip_velocity` works out both slips on every wheel solve, where the solve only needs `v_slip_d`. This may matter once the MPC runs the model many times.
-- **`z_offset`, `z_slope`, `F_offset`, `F_slope`** still have the old style of name; `I_stalled` and `dI_domega` replaced the same style for the current.
 - **`geometry` and `state` are still dictionaries.**
 - **The other scripts in `tests/`** use the working copy's class, so they do not run on the draft.
 - **The spec's "chassis contact speed"** (section 5, item 2) is what the draft calls `v_center_d`. The spec's wording is unchanged.

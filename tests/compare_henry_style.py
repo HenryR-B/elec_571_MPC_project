@@ -21,7 +21,7 @@ go = {}
 exec(a["ebf0a37d"], go)
 exec(a["21f5c2d7"].split("# 2. Instantiate")[0], go)
 gn = {}
-for cell_id in ("model", "timestep", "simulation", "controller", "constants"):
+for cell_id in ("constants", "geometry", "kinematics", "forces", "chassis_dynamics", "wheel_solve", "step", "voltage_commands", "disturbances", "history", "run"):
     exec(b[cell_id], gn)
 
 FWD, STR, ROT = gn["FORWARD"], gn["STRAFE_RIGHT"], gn["ROTATE_CCW"]
@@ -30,46 +30,47 @@ A45 = (np.radians(45.0), np.radians(45.0))
 TESTS = []
 for label, angles, voltage in (("45/45 1 V", A45, 1.0), ("30/45 1 V", A30, 1.0), ("30/45 10 V", A30, 10.0)):
     for motion, pattern in (("forward", FWD), ("strafe", STR), ("rotation", ROT)):
-        TESTS.append((f"{label} {motion}", angles, gn["constant_voltage"](voltage, pattern), 500))
+        TESTS.append((f"{label} {motion}", angles, gn["constant_voltage"](voltage, pattern, 500), 500))
 for motion, pattern in (("fwd/back/coast", FWD), ("side-to-side", -STR), ("rotation", ROT)):
     TESTS.append((f"30/45 4 V {motion}", A30, gn["multi_stage_voltage"](4.0, pattern, 1000), 3000))
 
 
 def old_plant(angles, sigma_V, sigma_mu, roller=False, cog=0.0):
-    p = dict(go["simulation_parameters"], alpha_f=angles[0], alpha_b=angles[1], sigma_V=sigma_V, sigma_mu=sigma_mu, roller_friction=roller, cog_y=cog)
+    p = dict(go["simulation_parameters"], alpha_f=angles[0], alpha_b=angles[1], sigma_V=sigma_V, sigma_mu=sigma_mu, roller_friction=roller, cog_y=cog, lugre_damping_ratio=0.0)
     return go["OmniRobotSimulation"](p, random_seed=42), go["OmniMotorState"]()
 
 
-def run_old(angles, controller, steps, sigma_V, sigma_mu, roller, cog):
+def run_old(angles, voltages, steps, sigma_V, sigma_mu, roller, cog):
     sim, s = old_plant(angles, sigma_V, sigma_mu, roller, cog)
     out, t0 = [], time.perf_counter()
     for k in range(steps):
-        s, T_load, S = sim.step(s, controller(k, None))
+        s, T_load, S = sim.step(s, voltages[k])
         out.append(np.concatenate((s.pos_global, s.v_global, s.v_local, s.omega, s.I, s.z, s.a_local_past, s.V_actual, T_load, S, [sim.last_iterations])))
     return np.array(out), time.perf_counter() - t0
 
 
-def run_new(angles, controller, steps, sigma_V, sigma_mu, roller, cog):
+def run_new(angles, voltages, steps, sigma_V, roller, cog):
     gn["ROLLER_FRICTION"], gn["COG_FORWARD"] = roller, cog
-    geometry, rng, s = gn["wheel_geometry"](*angles), np.random.default_rng(seed=42), gn["initial_state"]()
+    geometry, rng, s = gn["wheel_geometry"](*np.degrees(angles)), np.random.default_rng(seed=42), gn["initial_state"]()
     out, t0 = [], time.perf_counter()
     for k in range(steps):
-        w_F, w_mu = gn["draw_disturbances"](rng, sigma_V, sigma_mu)
-        s, T_load, slipping, solves = gn["step"](s, controller(k, gn["measured_outputs"](s)), geometry, w_F, w_mu)
+        F_n = gn["wheel_normal_forces"](s["a_local_past"], geometry) + gn["draw_load_disturbance"](rng, sigma_V)
+        s, T_load, slipping, solves = gn["step"](s, voltages[k], F_n, geometry)
         out.append(np.concatenate((s["pos_global"], s["v_global"], s["v_local"], s["omega"], s["I"], s["z"], s["a_local_past"], s["V_actual"], T_load, slipping, [solves])))
     return np.array(out), time.perf_counter() - t0
 
 
-CASES = [("noise off", 0.0, 0.0, False, 0.0), ("noise on", 0.15, 0.03, False, 0.0),
-         ("noise off, roller on", 0.0, 0.0, True, 0.0), ("noise on, roller on", 0.15, 0.03, True, 0.0),
-         ("noise off, CoG 10.2 mm", 0.0, 0.0, False, 10.206e-3), ("noise on, CoG 10.2 mm, roller on", 0.15, 0.03, True, 10.206e-3)]
+# The rewrite has no friction noise and no sigma_1, so the working notebook runs with sigma_mu = 0 and lugre_damping_ratio = 0
+CASES = [("noise off", 0.0, False, 0.0), ("load noise on", 0.15, False, 0.0),
+         ("noise off, roller on", 0.0, True, 0.0), ("load noise on, roller on", 0.15, True, 0.0),
+         ("noise off, CoG 10.2 mm", 0.0, False, 10.206e-3), ("load noise on, CoG 10.2 mm, roller on", 0.15, True, 10.206e-3)]
 failed = False
 t_old = t_new = 0.0
-for label, sigma_V, sigma_mu, roller, cog in CASES:
+for label, sigma_V, roller, cog in CASES:
     worst_path, worst_state, flag_diffs, solve_diffs = 0.0, 0.0, 0, 0
-    for name, angles, controller, steps in TESTS:
-        A, ta = run_old(angles, controller, steps, sigma_V, sigma_mu, roller, cog)
-        B, tb = run_new(angles, controller, steps, sigma_V, sigma_mu, roller, cog)
+    for name, angles, voltages, steps in TESTS:
+        A, ta = run_old(angles, voltages, steps, sigma_V, 0.0, roller, cog)
+        B, tb = run_new(angles, voltages, steps, sigma_V, roller, cog)
         t_old += ta
         t_new += tb
         # The last column is the solve count, the four before it the slip flags
@@ -85,12 +86,12 @@ print(f"run time of the plant steps, all cases: working copy {t_old:.1f} s, rewr
 # The rewrite's own loop against the way the working notebook's test cells log a run: record, then step
 gn["ROLLER_FRICTION"], gn["COG_FORWARD"] = False, 0.0
 worst_logged = 0.0
-for name, angles, controller, steps in TESTS:
-    for sigma_V, sigma_mu in ((0.0, 0.0), (gn["SIGMA_LOAD"], gn["SIGMA_MU"])):
-        history = gn["run_simulation"](controller, steps, gn["wheel_geometry"](*angles), sigma_V, sigma_mu)
-        sim, s = old_plant(angles, sigma_V, sigma_mu)
+for name, angles, voltages, steps in TESTS:
+    for sigma_V in (0.0, gn["SIGMA_LOAD"]):
+        history = gn["run_simulation"](voltages, gn["wheel_geometry"](*np.degrees(angles)), sigma_V)
+        sim, s = old_plant(angles, sigma_V, 0.0)
         for k in range(steps):
-            V = controller(k, None)
+            V = voltages[k]
             worst_logged = max(worst_logged, np.max(np.abs(history["V"][k] - V)), np.max(np.abs(history["omega"][k] - s.omega)),
                                np.max(np.abs(history["v_local"][k] - s.v_local)), np.max(np.abs(history["pos_global"][k] - s.pos_global)))
             s, _, _ = sim.step(s, V)
@@ -102,9 +103,10 @@ def code_only(source):
     return re.sub(r"#.*", "", re.sub(r'"""[\s\S]*?"""', "", source))
 
 
-RULES = [("model", r"\bDT\b", "no time step"), ("model", r"\brng\b|sigma_|\.normal\(", "no noise generator"), ("model", r"controller|measurement", "no controller"),
-         ("timestep", r"\brng\b|sigma_|\.normal\(", "no noise generator"), ("timestep", r"controller|measurement", "no controller"),
-         ("controller", r"state\[|\bstep\(", "no access to the plant state")]
+RULES = [(cell, pattern, rule) for cell in ("geometry", "kinematics", "forces") for pattern, rule in ((r"\bDT\b", "no time step"), (r"\brng\b|sigma_|\.normal\(", "no noise generator"), (r"controller|measurement", "no controller"))] + [
+         ("chassis_dynamics", r"\brng\b|sigma_|\.normal\(", "no noise generator"), ("wheel_solve", r"\brng\b|sigma_|\.normal\(", "no noise generator"), ("wheel_solve", r"controller|measurement", "no controller"),
+         ("step", r"\brng\b|sigma_|\.normal\(", "no noise generator"), ("step", r"controller|measurement", "no controller"),
+         ("voltage_commands", r"state\[|\bstep\(", "no access to the plant state")]
 for cell_id, pattern, rule in RULES:
     broken = bool(re.search(pattern, code_only(b[cell_id])))
     failed |= broken

@@ -10,6 +10,7 @@ Henry's constants); its change log is `dana-models/open_loop_model_changes.md`.
 | `williams/` | The later Williams-based simulator modules: actuator and motor models, PID controller, integrator, robot dynamics and simulation. |
 | `continuous_time/` | The continuous-time models, integrated with `solve_ivp` / Radau: Henry's full models `robot_model_voltage.ipynb` and `robot_model_current.ipynb` (LuGre, load transfer), the earlier `RobotSimulationOpenLoopModel_ClaudeReference.ipynb`, and the plans written for them (friction model, wheel geometry and contact, wheel-slip workflow, the model comparison with Dana's). |
 | `bldc_current_loop/` | The current-command input and the Simovr (Tinymovr) current-loop model that were removed from the working model on 2026-10-27, kept for the BLDC model planned for December: `bldc_current_loop_notes.md` (the BLDC-as-DC notes, the firmware and Rustware constants, the removed code) and the current-loop scripts. |
+| `BLDC/` | The BLDC motor in the same structure as `dana-mpc-copy-with-estimator/` (2026-11-11): `voltage_scaled/` (the five notebooks with the BLDC motor and current limits, voltage input, for comparison with the Pololu copy) and `current_loop_plan/` (the plan for the current-commanded version). |
 
 **Running the archived notebooks and scripts:** they import `robot_constants.py` from the repository root. The
 notebooks expect it next to them, so open them with the repository root as the working directory (or add the root

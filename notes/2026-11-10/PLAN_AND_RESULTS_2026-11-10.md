@@ -1,6 +1,6 @@
-# Plan for 2026-11-12, and where things stand at the end of 2026-11-11
+# Plan and results, 2026-11-10
 
-Read this first next session. Nothing here is committed (Henry commits himself).
+Read this first next session (Henry commits himself).
 
 ## 1. Where things stand
 
@@ -12,7 +12,7 @@ All the work is in `dana-mpc-copy-with-estimator/`. Dana's folder `dana-models/`
 | `ControllerAnalysis_Linearized.ipynb` | Untracked: the linearized model's checks (Steps 1-3) and closed-loop tests |
 | `ControllerAnalysis_Estimator.ipynb` | Uncommitted additions (runner branches `mpc_no_vel`, `mpc_1ms`, turning test, 1 ms comparison) |
 
-`scratch/` was deleted on 11-11: the 1 ms friction estimator and the 1 ms pose-differencing version were both replaced by `RobotObserver1ms`.
+`scratch/` was deleted on 11-10: the 1 ms friction estimator and the 1 ms pose-differencing version were both replaced by `RobotObserver1ms`.
 
 **The linearized model now (`OmniRobotLinearizedModel`):**
 - **20 states:** pose, global velocity, currents, wheel speeds, bristles z, and the lagged acceleration `a_past` (the plant's `a_local_past`).
@@ -38,14 +38,14 @@ All the work is in `dana-mpc-copy-with-estimator/`. Dana's folder `dana-models/`
 
 For comparison on the hops, the eights and the pi turn (RMS): PID 25-56 cm, Dana's simple MPC (with Bryson weights) 3-6 cm.
 
-**Why `mpc_lin` and `mpc_lin_obs` give the same results:** the plant's `get_observable_state` hands over the exact pose, wheel speeds and currents, with no noise and no delay. The two controllers differ only in their starting state, and with perfect sensors both starting states are nearly right. The observer has nothing to fix. **That is what tomorrow is for.**
+**Why `mpc_lin` and `mpc_lin_obs` give the same results:** the plant's `get_observable_state` hands over the exact pose, wheel speeds and currents, with no noise and no delay. The two controllers differ only in their starting state, and with perfect sensors both starting states are nearly right. The observer has nothing to fix. **That is what the next session is for (section 2).**
 
-**Re-learned today (it was already in `notes/2026-11-09`, section 3.4-3.5):**
+**Re-learned this session (it was already in `notes/2026-11-09`, section 3.4-3.5):**
 - Differentiating d lets the plan run away while sliding hard. Holding it is needed.
 - The same-step load transfer flutters. The plant avoids it with the last step's acceleration.
 - The z bound (|z| <= 0.93) was the 11-09 fix for the runaway. Henry does not want it for now. (A fully sliding wheel sits at z = mu_d/mu_s, about 0.44-0.9, so the bound caps the force at the grip peak; it does not forbid sliding.)
 
-## 2. Tomorrow: a delayed camera, so the observer matters
+## 2. Next session (2026-11-11): a delayed camera, so the observer matters
 
 **Goal:** show that the 1 ms observer helps the linearized MPC when the camera pose is late, as on the real robot (camera about 60 Hz, about 50 ms late).
 
@@ -73,7 +73,7 @@ Steps (ask Henry before each):
 - **Plant load clipping:** when a wheel lifts, clipping it at 0 does not move its load to the others (seen once: 28.9 N against 26.5 N weight). Henry: rare, not the problem. Note only.
 - **Later:** the terminal (Riccati) cost; retuning weights for the linearized MPC.
 
-## 4. Today's changes, for reference
+## 4. This session's changes, for reference
 
 - **Figures:** heading arrows on the X-Y plots, heading error under each position-error plot.
 - **Heading weight:** separate 5 deg tolerance (heading error on the pi turn 20 deg to 0.9 deg, position unchanged).

@@ -52,6 +52,36 @@ Files changed today (all uncommitted):
    - Whether to move `predict()` out of `BristleModel` into the check cell. It's only used by the check.
    - Fix the other notebooks' `exec` loading so the editor sees the names (done for `MPCModel_Bristle` only).
 
+### Added 2026-11-10: realistic sensing and delays (next up, ask Henry before each step)
+
+**The real robot, from Rustware `origin/master` (2026-11-02):**
+- **Main loop:** estimate plus trajectory tracker every 10 ms.
+- **Fast sensors:** IMU and optical flow every 1 ms, each in its own thread.
+- **Vision:** 60 Hz, about 50 ms late (the value in the team's Kalman benchmark).
+- **Late vision:** the Kalman keeps a 300 ms buffer of time-stamped measurements. A late frame is applied at its capture time, then the faster readings since then are replayed to now.
+- **Motors:** wheel-velocity commands over CAN; the Tinymovr boards run their own velocity and current loops.
+
+**Our simulation differs in three ways:**
+- the controller gets the state with no delay;
+- the voltage is applied the instant it's computed (no solve time);
+- the MPC runs every 20 ms, not 10.
+
+**Assume the encoders don't drift.** Then the steps are:
+
+1. **Realistic sensing in the simulation:**
+   - encoders every 1 ms, exact;
+   - the camera pose every 16.7 ms, delivered 50 ms late;
+   - the MPC's voltage applied after its solve time.
+2. **Run JP3 with that,** using its current simple estimator, to see how much the delay costs.
+3. **Estimator:**
+   - every 1 ms, step the model with the measured current and correct it with the encoders;
+   - when a late camera frame arrives, correct the pose at its capture time and replay to now;
+   - start with a fixed correction gain; a full EKF gain comes later (the observer's `step()` already gives `Phi`).
+4. **Rerun JP3 with the estimator,** to see how much it recovers.
+5. **Then:**
+   - the MPC at 10 ms, to match the firmware;
+   - the two-thread design: estimator and relinearization every 1 ms, the QP every 10–20 ms, with fast feedback u = u_plan + K·(x̂ − x_plan) between solves.
+
 ## 3. Results
 
 ### 3.1 Dana's test suite: final candidates (her plant, `model_choice = 2`, her parameters)

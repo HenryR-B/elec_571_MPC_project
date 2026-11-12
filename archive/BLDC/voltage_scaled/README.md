@@ -38,4 +38,6 @@ The controllers' voltage settings ask for **the same force at the wheels as the 
 
 The controllers do not know the battery limit; only the plant enforces it.
 
+**`MPCControllerLinearizedRiccati`** (2026-11-11, the same class as in the Pololu copy): the linearized MPC with a Riccati terminal cost, recomputed every 20 ms from the last horizon step's model. It is `'mpc_lin_riccati'` in the Linearized runner, with the same BLDC limits as `'mpc_lin'`. As in the Pololu copy, that notebook's three test cells now run `'pid_tuned'`, `'mpc'`, `'mpc_lin'` and `'mpc_lin_riccati'`; `'pid'` and `'mpc_lin_obs'` stay in the runner.
+
 **`'pid_tuned'`** (both runners and the tests): Dana's PID for **this motor** (2026-11-11). From the BLDC search (separate training paths, stay on track with a 50 % gain margin): position kp 3, ki 0.1 (Dana's; the search had 0 to 0.05), kd 0.2; wheel PI kp 0.05, ki 2 (Pololu-equivalent, x1.06 same force); a_max 2. alpha_max 15 and k_theta 15 are an educated adjustment (the search found 30 and 25, which slid 77 % of the time on the quick hops); not re-verified. On the held-out paths the search's version was about 40 % more accurate than Dana's PID. The Pololu-tuned gains blew up on every BLDC test path: the direct-drive wheel has about 10 times less inertia and cannot take their wheel integral gain of 20.

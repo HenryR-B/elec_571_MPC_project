@@ -63,6 +63,8 @@ Dana's originals are in `dana-models/Project Design Folder/`; the changed copies
 - The path plots have heading arrows, and each position-error plot has a heading-error plot under it (83cbe72).
 - An observer test: its estimate against the plant's true state, compared with Dana's 20 ms pose difference (83cbe72).
 - Its "Sliding (%)" column counts a wheel as sliding above the plant's `slip_band`, read from the parameters (11-11, not yet committed).
+- The acceptable voltage `max_V` (the MPCs' light cost on the voltage itself) comes from one rule: the voltage that holds a 40 rad/s wheel speed and pushes at the grip limit, `Kb·40 + R·μs(Mr·g/4)·r/Kt`. That gives 11.7 V on the Pololu (it was 6 V) and 2.7 V on the BLDC (it was 6.4 V). Only this file changed; `ControllerAnalysis_Estimator.ipynb` still uses 6 V (11-11, not yet committed).
+- The test-motion figure eights are set at this motor's limit: 2.8 s per lap (inside it) and 2.5 s (past it), in place of 3 s and 3.4 s. The Pololu's limit is top speed (back-EMF against the 12 V supply), not grip; the markdown above the cell gives the numbers. The BLDC copy keeps 3.4 s and 3 s, because its limit is grip (11-11, not yet committed).
 - Added `'mpc_lin_riccati'` to the runner. The three test cells now run `'pid_tuned'`, `'mpc'`, `'mpc_lin'` and `'mpc_lin_riccati'`; `'pid'` and `'mpc_lin_obs'` are left out until the camera delay is added (they stay in the runner) (11-11, not yet committed).
 
 ## Kept as they are

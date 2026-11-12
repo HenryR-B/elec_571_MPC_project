@@ -29,7 +29,7 @@ The controllers' voltage settings ask for **the same force at the wheels as the 
 
 | Setting | Pololu copy | BLDC copy (same force) |
 |---|---|---|
-| MPC acceptable voltage `max_V` | 6 V (2.75 A) | 6.4 V (26 A) |
+| MPC acceptable voltage `max_V` | 6 V (2.75 A) | 6.4 V (26 A). **Linearized runner since 11-11:** both copies use one rule instead, `Kb·40 rad/s + R·i_grip` (the voltage that holds top wheel speed and pushes at the grip limit): 11.7 V Pololu, 2.7 V BLDC |
 | MPC acceptable voltage change `max_dV` | 0.5 V per step (0.23 A) | 0.53 V per step (2.2 A) |
 | MPC slew limit `delta_v_max` | 5 V per step | 5.3 V per step |
 | PID wheel PI gains | kp 0.15, ki 0.8 | × 1.06 (same force per speed error) |

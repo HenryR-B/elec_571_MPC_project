@@ -18,7 +18,7 @@
    - The current limit becomes a plain input bound, |i_cmd| ≤ 17.3 A.
    - The voltage headroom becomes a linear constraint, |R·i + Kb·ω| ≤ 13.44 V.
    - The battery limit Σ V·i ≤ 336 W is not linear; linearize it along the plan or use a conservative per-motor share.
-   - The Bryson costs become costs on current and current change, which replaces the "same currents" voltage scaling of the voltage-scaled copy.
+   - The Bryson costs become costs on current and current change, which replaces the "same force" voltage scaling of the voltage-scaled copy.
 4. **PID: the robot's own velocity loop.** Dana's wheel PI outputs current instead of voltage, or uses Rustware's gains (0.196 A per rad/s, 19.6 A per rad) directly.
 5. **Observer:** the voltage input to its prediction becomes the current command (or the measured current); the measured currents and wheel speeds stay as they are.
 6. **Tests:** the same checks and closed-loop paths as the voltage-scaled copy, then compare the three: Pololu, BLDC voltage-scaled, BLDC current-controlled.

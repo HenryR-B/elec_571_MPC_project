@@ -25,26 +25,17 @@ Same five notebooks, same classes, same COG (`cog_y` = 0) and friction. The cell
 
 ### ControllerAnalysis_Estimator.ipynb and ControllerAnalysis_Linearized.ipynb (the runners)
 
-The controllers' voltage settings mean **the same currents as the Pololu settings** (V = R·i, a factor R_BLDC / R_Pololu = 0.24 / 2.18), as Henry chose. **To be replaced by a current controller** (`../current_loop_plan/`), where these become current settings directly.
+The controllers' voltage settings ask for **the same force at the wheels as the Pololu settings**. One amp gives 8.5 N on the Pololu (geared) and 0.89 N on the BLDC (direct drive), so the same force takes 9.6 times the current; with the BLDC's 9 times lower resistance (V = R·i) that is a factor (0.24 / 2.18) × (0.255 / 0.0265) = **1.06 on the Pololu's voltage numbers**. (A first version used the same currents instead, a factor 0.11: that allowed the BLDC about a tenth of the force, and the robot lagged 9-44 cm while using at most 6 A of the 17.3 A available.) **To be replaced by a current controller** (`../current_loop_plan/`), where these become current or force settings directly.
 
-| Setting | Pololu copy | BLDC copy |
+| Setting | Pololu copy | BLDC copy (same force) |
 |---|---|---|
-| MPC acceptable voltage `max_V` | 6 V | 6 V × 0.24/2.18 = 0.66 V (2.75 A) |
-| MPC acceptable voltage change `max_dV` | 0.5 V per step | 0.055 V per step (0.23 A) |
-| MPC slew limit `delta_v_max` | 5 V per step | 0.55 V per step (2.3 A) |
-| PID wheel PI gains | kp 0.15, ki 0.8 | × 0.24/2.18 (same current per speed error) |
-| Voltage limit (PID, MPC) | 12 V | 13.44 V (the supply) |
+| MPC acceptable voltage `max_V` | 6 V (2.75 A) | 6.4 V (26 A) |
+| MPC acceptable voltage change `max_dV` | 0.5 V per step (0.23 A) | 0.53 V per step (2.2 A) |
+| MPC slew limit `delta_v_max` | 5 V per step | 5.3 V per step |
+| PID wheel PI gains | kp 0.15, ki 0.8 | × 1.06 (same force per speed error) |
+| Voltage limit (PID, MPC) | 12 V | 13.44 V (0.8 PWM limit × 16.8 V battery) |
 | MPC current limit | 20 A | 17.3 A (the driver) |
 
 The controllers do not know the battery limit; only the plant enforces it.
 
-### ControllerAnalysis_Linearized.ipynb (the checks)
-
-The step 1-3 checks and the observer test use BLDC voltages that keep every current under the driver limit (|V − Kb·ω|/R ≤ 12.5 A) but still make the wheels slide (12.5 A × 0.89 N/A ≈ 11 N per wheel, against about 5-7 N of grip): 1.5 V strafe (6 V and 10 V on the Pololu), 1 V side-to-side (4 V), random ±1.5 V steps (±8 V).
-
-## Checks (2026-11-11)
-
-- Step 1: the model's rates match the plant's to round-off; loads exact.
-- Step 2: the Jacobians match the hand-worked entries.
-- Step 3, 0.4 s position error, median / worst: strafe 1.7 / 4.8 mm, side-to-side 0.1 / 10.8 mm, random steps 1.9 / 7.8 mm (Dana's simple model: 45-120 mm median).
-- Observer: velocity error 0.2-0.5 mm/s median.
+**`'pid_tuned'`** (both runners and the tests): Dana's PID for **this motor** (2026-11-11). From the BLDC search (separate training paths, stay on track with a 50 % gain margin): position kp 3, ki 0.1 (Dana's; the search had 0 to 0.05), kd 0.2; wheel PI kp 0.05, ki 2 (Pololu-equivalent, x1.06 same force); a_max 2. alpha_max 15 and k_theta 15 are an educated adjustment (the search found 30 and 25, which slid 77 % of the time on the quick hops); not re-verified. On the held-out paths the search's version was about 40 % more accurate than Dana's PID. The Pololu-tuned gains blew up on every BLDC test path: the direct-drive wheel has about 10 times less inertia and cannot take their wheel integral gain of 20.

@@ -35,6 +35,8 @@ Dana's originals are in `dana-models/Project Design Folder/`; the changed copies
 - Added `RobotObserver1ms`: a 1 ms observer that predicts with the model and corrects with wheel speeds and currents every 1 ms and the camera pose every 20 ms (83cbe72).
 - Added `MPCControllerLinearized`: a subclass of Dana's MPC that reuses her optimization problem unchanged (one extra state fixed at 1 carries the offset c_j), linearizes along its last plan, and takes its starting state from `'pose'`, `'observer'` or `'true'` (c91bd40 → eb1e35e).
 - After a failed solve, the linearized MPC starts OSQP cold (83cbe72).
+- The linearized MPC's step 3 (setting A_j, B_j in Dana's problem) became its own method, `set_model_parameters`, with no change in behaviour (11-11, not yet committed).
+- Added `MPCControllerLinearizedRiccati`: the linearized MPC with a Riccati terminal cost. Dana's fixed terminal weights are set to zero, and the weight on the pose and velocity error at the last step comes from the discrete Riccati equation of that step's model, recomputed every 20 ms (11-11, not yet committed).
 - Added `FastPoseVelocityEstimator` and `MPCControllerSimple1msEstimator`: Dana's pose estimator run every 1 ms, for her simple MPC (c91bd40).
 - Each new class has a markdown cell with a Subfunction box, in the same style as Dana's classes (eb1e35e).
 
@@ -61,6 +63,7 @@ Dana's originals are in `dana-models/Project Design Folder/`; the changed copies
 - The path plots have heading arrows, and each position-error plot has a heading-error plot under it (83cbe72).
 - An observer test: its estimate against the plant's true state, compared with Dana's 20 ms pose difference (83cbe72).
 - Its "Sliding (%)" column counts a wheel as sliding above the plant's `slip_band`, read from the parameters (11-11, not yet committed).
+- Added `'mpc_lin_riccati'` to the runner. The three test cells now run `'pid_tuned'`, `'mpc'`, `'mpc_lin'` and `'mpc_lin_riccati'`; `'pid'` and `'mpc_lin_obs'` are left out until the camera delay is added (they stay in the runner) (11-11, not yet committed).
 
 ## Kept as they are
 

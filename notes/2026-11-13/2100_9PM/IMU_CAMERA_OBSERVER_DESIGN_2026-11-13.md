@@ -36,3 +36,13 @@ Values: not chosen yet. Either Henry's observer's (camera 1.0 / 0.5; IMU 1.0), o
 - the parameter values (above)
 - how it plugs into the linearized MPC: a new subclass (e.g. `MPCControllerLinearizedIMU`) or a new `state_estimate` mode
 - the lagged acceleration without the IMU
+
+## Built (11-14)
+`ImuCameraObserver` in `merged/ControllerModels.ipynb` (with the linearized model), as designed above. The linearized MPC uses it with `state_estimate='observer'`: pose and velocity from the observer; currents and wheel speeds measured; bristles from the torque balance; the lagged acceleration from those forces (the model's value, with or without the IMU). Dana's runner feeds it every plant step (`estimator_update`, the camera pose at the last sub-step). `RobotObserver1ms` (the linearized-model observer) was removed.
+
+Defaults (not tuned): `imu_trust` 1.0, `camera_trust_pose` 1.0, `camera_trust_velocity` 0.5. First checks (open loop, against the true state, every 20 ms; velocity RMS):
+- IMU on, exact camera: 0.6 mm/s (Dana's 20 ms pose difference: 25 to 35 mm/s)
+- IMU off, exact camera: 75 to 86 mm/s, worse than the pose difference: the velocity is held between frames and only half corrected per frame
+- 2 mm / 0.5 deg camera noise: 76 mm/s with the IMU (pose difference 190); the pose follows the camera fully (camera_trust_pose 1.0)
+So the trust values need tuning (on training paths), per case (IMU on / off, camera noise).
+Closed loop, Dana's section 1: linearized MPC 0.82 cm RMS with the observer, 0.84 with the camera pose and the pose difference.

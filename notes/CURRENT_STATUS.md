@@ -30,5 +30,8 @@ All five MPCs share the defaults (pose 100/100/60, vel 15/15/8, voltage 0.015, s
 4. IMU + camera observer (design note; open: gains, how it plugs in, lagged acceleration without IMU).
 5. Grading proposal: `notes/2026-11-13/1800_6PM/GRADING_PROPOSAL_2026-11-13.md`.
 
+## Don't forget (end of project)
+- Parameter sweep over the plant friction values (Henry set them 11-14: mu_s 0.9, mu_k 0.4, alpha_d 1.0, rollers on).
+
 ## Environment
 - Run notebooks headless with the scratchpad `run_nb.py` approach (IPython shell, Agg backend); `jupyter nbconvert` is not installed. One simulation at a time.
